@@ -22,22 +22,19 @@ const routes: RouteRecordRaw[] = [
     children: [{ path: '', component: () => import('pages/ProfilePage.vue') }],
   },
   {
-    path: '/chats',
-    component: () => import('layouts/MainLayout.vue'),
-    children: [{ path: '', component: () => import('pages/ChatsListPage.vue') }],
-  },
-  {
     path: '/settings',
     component: () => import('layouts/MainLayout.vue'),
     children: [{ path: '', component: () => import('pages/SettingsPage.vue') }],
   },
   {
   path: '/chats',
-    component: () => import('pages/ChatsListPage.vue')
+    component: () => import('layouts/MainLayout.vue'),
+    children: [{ path: '', component: () => import('pages/ChatsListPage.vue') }],
   },
   {
     path: '/chats/:id',
-    component: () => import('pages/ChatPage.vue')
+    component: () => import('layouts/MainLayout.vue'),
+    children: [{ path: '', component: () => import('pages/ChatPage.vue') }],
   },
 
   // Always leave this as last one,
