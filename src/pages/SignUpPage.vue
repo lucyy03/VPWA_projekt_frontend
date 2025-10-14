@@ -5,9 +5,25 @@
       <q-separator />
       <q-card-section class="q-gutter-md">
         <q-input
+          v-model="first_name"
+          type="text"
+          label="First Name"
+          autocomplete="first_name"
+          dense
+          outlined
+        />
+        <q-input
+          v-model="last_name"
+          type="text"
+          label="Last Name"
+          autocomplete="last_name"
+          dense
+          outlined
+        />
+        <q-input
           v-model="email"
           type="email"
-          label="email"
+          label="E-mail"
           autocomplete="email"
           dense
           outlined
@@ -15,7 +31,7 @@
         <q-input
           v-model="password"
           type="password"
-          label="password"
+          label="Password"
           autocomplete="current-password"
           dense
           outlined
@@ -24,18 +40,10 @@
 
         <q-btn
           :loading="loading"
-          label="Log In"
-          color="primary"
-          class="full-width"
-          @click="onSubmit"
-        />
-
-        <q-btn
-          :loading="loading"
           label="Sign Up"
           color="primary"
           class="full-width"
-          @click="onSignUp"
+          @click="onSubmit"
         />
 
         <div v-if="error" class="text-negative text-caption">{{ error }}</div>
@@ -53,6 +61,8 @@ const email = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+const first_name = ref('')
+const last_name = ref('')
 
 function onSubmit() {
   
@@ -63,16 +73,5 @@ function onSubmit() {
   loading.value = false
 
   void router.push('/chats')
-}
-
-function onSignUp() {
-  
-
-  loading.value = true
-  error.value = ''
-
-  loading.value = false
-
-  void router.push('/signup')
 }
 </script>
