@@ -1,6 +1,8 @@
 //no backend; simple shared mock data for list + detail
 import { ref, computed } from 'vue'
 
+let msgSeq = 1
+
 export type Message = {
   id: string
   authorId: string
@@ -20,6 +22,23 @@ export type Chat = {
 }
 
 export const me: Member = { id: 'me', name: 'You', avatar: 'https://cdn.quasar.dev/img/boy-avatar.png' }
+
+function makeStaticHistory(authorId: string, meId: string, count: number, startIso = '2025-03-28T09:00:00Z'): Message[] {
+  const out: Message[] = []
+  let t = new Date(startIso).getTime()
+  for (let i = 0; i < count; i++) {
+    const fromPeer = i % 2 === 0
+    out.push({
+      id: 'r' + (msgSeq++),
+      authorId: fromPeer ? authorId : meId,
+      text: fromPeer ? `msg ${i + 1} from ${authorId}` : `reply ${i + 1}`,
+      createdAt: new Date(t).toISOString()
+    })
+    //fixed +60 seconds between messages
+    t += 60 * 1000
+  }
+  return out
+}
 
 export const chats = ref<Chat[]>([
   {
@@ -46,7 +65,8 @@ export const chats = ref<Chat[]>([
       me,
       { id: 'richard', name: 'Richard', avatar: 'https://media.discordapp.net/attachments/787479869339860995/1429086875842383992/image.png?ex=68f4dc5e&is=68f38ade&hm=139cd9c65e542a9e455d27c655c5837631b258ae51f1936d084498e5865970a0&=&format=webp&quality=lossless&width=464&height=386' }
     ],
-    messages: genChatHistory('richard', me.id, 25),
+    //prefill with a lot of messages, static history so infinite scroll has plenty to reveal
+    messages: makeStaticHistory('richard', me.id, 250, '2025-03-28T09:00:00Z'),
     unread: 0,
     lastStamp: '09:14',
     lastPreview: '“bro, you won’t believe this dota match...”'
@@ -74,7 +94,9 @@ export const chats = ref<Chat[]>([
       me,
       { id: 'leo', name: 'Leo', avatar: 'https://media.discordapp.net/attachments/787479869339860995/1429088297027899403/image.png?ex=68f4ddb1&is=68f38c31&hm=86241581b0ccc1b3268e6b8bee1e700f30dcf088c232ae41e69cd61582be5947&=&format=webp&quality=lossless&width=654&height=600' }
     ],
-    messages: genChatHistory('richard', me.id, 25),
+    messages: [
+      { id: 'm1', authorId: 'leo', text: '“Woof! ૮₍´｡ᵔ ꈊ ᵔ｡`₎ა”', createdAt: '2025-03-31T18:10:00Z' }
+    ],
     unread: 0,
     lastStamp: '18:46',
     lastPreview: '“Woof! ૮₍´｡ᵔ ꈊ ᵔ｡`₎ა”'
@@ -96,7 +118,7 @@ export const chats = ref<Chat[]>([
     lastPreview: 'Alex: let’s meet at 5!'
   }
 ])
-
+/*
 //helper: generate N old messages for mock; newest last
 export function genChatHistory(authorId: string, meId: string, count: number, startIso = '2025-03-28T09:00:00Z') {
   const out: Message[] = []
@@ -117,7 +139,7 @@ export function genChatHistory(authorId: string, meId: string, count: number, st
   }
   return out
 }
-
+*/
 
 export function getChatById(id: string) {
   return computed(() => chats.value.find(c => c.id === id))

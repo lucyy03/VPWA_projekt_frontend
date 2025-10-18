@@ -1,5 +1,5 @@
 <template>
-  <q-page class="flex column bg-grey-1">
+  <q-page class="flex column bg-grey-1" style="height:100vh">
     <q-toolbar class="bg-white q-pa-sm">
       <q-btn flat round dense icon="arrow_back" :to="'/chats'" />
       <q-avatar v-if="headerAvatarUrl || headerLetter" size="32px" class="q-ml-sm q-mr-sm">
@@ -19,66 +19,131 @@
     </div>
 
     <template v-else>
-      <!-- use plain <div> instead of q-scroll-area for a quick sanity check -->
-      <div class="col q-pa-md" style="overflow:auto">
-        <!--
-        <div v-for="m in chat.messages" :key="m.id" class="q-mb-sm">
-          <strong>{{ nameOf(m.authorId) }}:</strong> {{ m.text }} <em>({{ fmt(m.createdAt) }})</em>
+      <!-- chat area: single flex column with min-height:0 -->
+       <div class="col column no-wrap" style="min-height:0">
+        <!--scrollable container that QInfiniteScroll-->
+        <div ref="scrollEl" class="col scroll chat-scroll" :style="{ minHeight: '0', flex: '1 1 auto', overflowY: 'auto', paddingBottom: composerH + 'px' }">
+          <q-infinite-scroll
+            :key="chat?.id"
+            ref="inf"
+            :offset="40"
+            :debounce="120"
+            :disable="isLoading"
+            reverse
+            :scroll-target="scrollEl || undefined"
+            @load="loadMore"
+          >
+            <div class="q-pa-md">
+              <QChatMessage
+                v-for="m in visible"
+                :key="m.id"
+                :name="nameOf(m.authorId)"
+                :avatar="avatarOf(m.authorId)"
+                :text="[m.text]"
+                :sent="m.authorId === me.id"
+                :stamp="fmt(m.createdAt)"
+              />
+            </div>
+
+            <!-- spinner while loading older -->
+            <template #loading>
+              <div class="row justify-center q-pa-sm">
+                <QSpinnerDots size="24px" />
+              </div>
+            </template>
+          </q-infinite-scroll>
+
+        
         </div>
-        -->
 
-        <QChatMessage
-          v-for="m in chat.messages"
-          :key="m.id"
-          :name="nameOf(m.authorId)"
-          :avatar="avatarOf(m.authorId)"
-          :text="[m.text]"
-          :sent="m.authorId === me.id"
-          :stamp="fmt(m.createdAt)"
-        />
-      </div>
+        <div ref="composerEl" class="composer q-pa-sm bg-white" style="position:sticky; bottom:0; flex:0 0 auto; z-index:1; border-top:1px solid rgba(0,0,0,.06)">
+          <!-- typing indicator (only when typing) -->
+          <div
+            v-if="remoteTyping"
+            class="row items-center q-pa-sm text-grey-7"
+            style="border-bottom:1px dashed rgba(0,0,0,.1); margin-bottom:8px"
+            @click="toggleTypingPreview"
+            title="click to preview"
+          >
+            <q-avatar v-if="headerAvatarUrl" size="24px"><img :src="headerAvatarUrl" alt="" /></q-avatar>
+            <div class="q-ml-sm">{{ peerName }} is typing</div>
+            <QSpinnerDots class="q-ml-xs" size="16px" />
+          </div>
 
-      <!-- typing indicator (click to toggle live preview) -->
-      <div
-        v-if="remoteTyping"
-        class="row items-center q-pa-sm text-grey-7 cursor-pointer"
-        @click="showTypingPreview = !showTypingPreview"
-        title="click to preview"
-      >
-        <q-avatar v-if="headerAvatarUrl" size="24px"><img :src="headerAvatarUrl" alt="" /></q-avatar>
-        <div class="q-ml-sm">{{ peerName }} is typing</div>
-        <QSpinnerDots class="q-ml-xs" size="16px" />
-      </div>
-
-      <!-- live preview of what peer is typing -->
-      <div v-if="remoteTyping && showTypingPreview" class="q-pa-sm">
-        <q-chip square color="grey-3" text-color="black" class="q-ma-none">
-          {{ remoteDraft }}<span class="text-grey-6">▌</span>
-        </q-chip>
-      </div>
+          <div v-if="remoteTyping && showTypingPreview" class="q-pa-sm">
+            <q-chip square color="grey-3" text-color="black" class="q-ma-none">
+              {{ remoteDraft }}<span class="text-grey-6">▌</span>
+            </q-chip>
+          </div>
 
 
-      <div class="q-pa-sm bg-white">
-        <q-input v-model="draft" placeholder="Message" dense outlined @keyup.enter="send">
-          <template #after>
-            <q-btn round dense icon="send" color="primary" @click="send" :disable="!draft.trim()" />
-          </template>
-        </q-input>
+        
+          <q-input v-model="draft" placeholder="Message" dense outlined @keyup.enter="send">
+            <template #after>
+              <q-btn round dense icon="send" color="primary" @click="send" :disable="!draft.trim()" />
+            </template>
+          </q-input>
+        </div>
       </div>
     </template>
   </q-page>
 </template>
 
+<style scoped>
+.chat-grid {
+  display: grid;
+  grid-template-rows: auto 1fr auto auto;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.chat-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
+}
+</style>
+
 <script setup lang="ts">
 /* no backend; all data comes from src/mock/chats.ts */
-import { ref, computed, onBeforeUnmount  } from 'vue'
+import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { QChatMessage, QSpinnerDots } from 'quasar'
-import { chats, me, type Member } from 'src/mock/chats'
+import { QChatMessage, QSpinnerDots, QInfiniteScroll } from 'quasar'
+import { chats, me, type Member, type Message } from 'src/mock/chats'
 
 defineOptions({ name: 'ChatPage' })
 
 const route = useRoute()
+
+const composerEl = ref<HTMLElement|null>(null)
+const composerH = ref(72)
+let ro: ResizeObserver | null = null
+
+// disable page scrolling while this view is active
+onMounted(() => {
+  document.body.classList.add('no-scroll')
+  const update = () => {
+    composerH.value = (composerEl.value?.offsetHeight ?? 72)
+  }
+  update()
+  ro = new ResizeObserver(update)
+  if (composerEl.value) ro.observe(composerEl.value)
+
+  //update on typing preview toggles as well
+  watch([() => remoteTyping.value, () => showTypingPreview.value], async () => {
+    await nextTick()
+    update()
+  })
+})
+onBeforeUnmount(() => {
+  document.body.classList.remove('no-scroll')
+  if (typingTimer) clearTimeout(typingTimer)
+  if (typingInterval) clearInterval(typingInterval)
+  if (ro && composerEl.value) ro.unobserve(composerEl.value)
+  ro = null
+})
 
 // look up the chat reactively based on :id
 const chat = computed(() => {
@@ -116,16 +181,18 @@ function avatarOf(authorId: string) {
 function fmt(iso: string) {
   try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
 }
+
 function send() {
   const c = chat.value
   const text = draft.value.trim()
   if (!c || !text) return
-  c.messages.push({
+  const msg: Message = {
     id: String(Math.random()).slice(2),
     authorId: me.id,
     text,
     createdAt: new Date().toISOString()
-  })
+  }
+   void appendMessage(msg, { force: true })
   draft.value = ''
   simulatePeerTypingAndReply() // trigger fake typing + reply
 }
@@ -187,19 +254,145 @@ function simulatePeerTypingAndReply() {
       typingInterval = null
     }
     const authorId = peer.value?.id ?? 'peer'
-    c.messages.push({
+    const reply: Message = {
       id: String(Math.random()).slice(2),
       authorId,
       text: fullText,
       createdAt: new Date().toISOString()
-    })
+    }
+    void appendMessage(reply)
     remoteDraft.value = ''
   }, typingMs)
 }
 
-onBeforeUnmount(() => {
-  if (typingTimer) clearTimeout(typingTimer)
-  if (typingInterval) clearInterval(typingInterval)
-})
+// helper: scroll to bottom when showing typing preview
+async function toggleTypingPreview() {
+  showTypingPreview.value = !showTypingPreview.value
+  await nextTick()
+  const el = scrollEl.value
+  if (el) {
+    // same logic as appendMessage: scroll if near bottom or forcing
+    requestAnimationFrame(() => {
+    el.scrollTop = el.scrollHeight
+    })
+  }
+}
+
+
+//helper: check if youre at the bottom when sending
+function isNearBottom(el: HTMLElement | null, thresh = 40) {
+  if (!el) return false
+  const delta = el.scrollHeight - (el.scrollTop + el.clientHeight)
+  return delta <= thresh
+}
+
+//helper: append a message to both source & visible, then scroll down
+async function appendMessage(msg: Message, opts: { force?: boolean } = {}) {
+  const c = chat.value
+  if (!c) return
+  const el = scrollEl.value
+  // scroll if user was near bottom OR if forced (for our own sends)
+  const shouldStick = (opts.force === true) || isNearBottom(el)
+
+  c.messages.push(msg)
+  visible.value = [...visible.value, msg]     // keep window in sync
+  await nextTick()
+  if (shouldStick && el) {
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+    })
+  }
+}
+
+//infinite scroll stuff
+const FAKE_LATENCY_MS = 450
+function sleep(ms: number) {
+  return new Promise<void>(r => setTimeout(r, ms))
+}
+
+const CHUNK = 25
+// const VIRTUAL_CAP = 5000
+
+//local window of messages shown
+const visible = ref<Message[]>([])
+
+//track how many messages from the bottom are already loaded
+// const loadedFrom = ref(0)
+const firstIndex = ref(0) //index in c.messages of visible[0]
+
+const inf = ref<InstanceType<typeof QInfiniteScroll> | null>(null)
+const scrollEl = ref<HTMLElement | null>(null)
+let isLoading = false
+
+//init/refresh when chat changes
+watch(
+  () => route.params.id,
+  async () => {
+    const c = chat.value
+    if (!c) {
+      visible.value = []
+      return
+    }
+
+    //start with the last CHUNK messages
+    const total = c.messages.length
+    firstIndex.value = Math.max(0, total - CHUNK)
+    visible.value = c.messages.slice(firstIndex.value)
+
+    await nextTick()
+    if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight
+
+    //always reset+resume; loadMore will decide when to stop
+    inf.value?.reset()
+    inf.value?.resume()
+  },
+  { immediate: true }
+)
+
+//load older when reaching the top
+async function loadMore(_index: number, done: () => void) {
+  if (isLoading) { done(); return }  // prevent concurrent loads
+  isLoading = true
+  try {
+    const c = chat.value
+    if (!c) return
+
+    const el = scrollEl.value
+    // const prevH  = el?.scrollHeight ?? 0
+    // const prevTop = el?.scrollTop ?? 0
+    // preserve distance from bottom instead of using prev height + top
+    const oldBottom = el ? (el.scrollHeight - el.scrollTop) : 0
+
+    //give the loading slot a chance to mount
+    await nextTick()
+    await sleep(FAKE_LATENCY_MS)
+
+    if (firstIndex.value > 0) {
+      const newFirst = Math.max(0, firstIndex.value - CHUNK)
+      const prepend = c.messages.slice(newFirst, firstIndex.value)
+      visible.value = [...prepend, ...visible.value]
+      firstIndex.value = newFirst
+
+      await nextTick()
+      if (el) {
+        // restore same distance from bottom so the viewport doesn't move
+        requestAnimationFrame(() => {
+          el.scrollTop = el.scrollHeight - oldBottom
+        })
+      }
+      if (firstIndex.value === 0) {
+        inf.value?.stop()
+      }
+      return
+    }
+
+
+    //no more preloaded items, just stop
+    inf.value?.stop()
+  } finally {
+    isLoading = false
+    done()
+  }
+}
 
 </script>
