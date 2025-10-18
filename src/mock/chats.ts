@@ -44,11 +44,9 @@ export const chats = ref<Chat[]>([
     isGroup: false,
     members: [
       me,
-      { id: 'richard', name: 'Richard', color: 'teal' }
+      { id: 'richard', name: 'Richard', avatar: 'https://media.discordapp.net/attachments/787479869339860995/1429086875842383992/image.png?ex=68f4dc5e&is=68f38ade&hm=139cd9c65e542a9e455d27c655c5837631b258ae51f1936d084498e5865970a0&=&format=webp&quality=lossless&width=464&height=386' }
     ],
-    messages: [
-      { id: 'm1', authorId: 'richard', text: 'bro, you won’t believe this dota match...', createdAt: '2025-04-01T07:14:00Z' }
-    ],
+    messages: genChatHistory('richard', me.id, 25),
     unread: 0,
     lastStamp: '09:14',
     lastPreview: '“bro, you won’t believe this dota match...”'
@@ -59,7 +57,7 @@ export const chats = ref<Chat[]>([
     isGroup: false,
     members: [
       me,
-      { id: 'lucia', name: 'Lucia', avatar: 'https://media.karousell.com/media/photos/products/2021/8/29/pet_commissions_updated_1630236394_c862862b_progressive.jpg' }
+      { id: 'lucia', name: 'Lucia', avatar: 'https://media.discordapp.net/attachments/787479869339860995/1429084887255875594/Screenshot_20251018-143233_Gallery.jpg?ex=68f4da84&is=68f38904&hm=14983b05f58d951adc8818aa67086474a1fe0e76c3f6092640fc0ec3f31d77ef&=&format=webp&width=918&height=912' }
     ],
     messages: [
       { id: 'm1', authorId: 'lucia', text: 'see you later at the café ☕', createdAt: '2025-03-31T16:10:00Z' }
@@ -67,6 +65,19 @@ export const chats = ref<Chat[]>([
     unread: 0,
     lastStamp: 'Yesterday',
     lastPreview: 'see you later at the café ☕'
+  },
+  {
+    id: 'leo',
+    name: 'Leo',
+    isGroup: false,
+    members: [
+      me,
+      { id: 'leo', name: 'Leo', avatar: 'https://media.discordapp.net/attachments/787479869339860995/1429088297027899403/image.png?ex=68f4ddb1&is=68f38c31&hm=86241581b0ccc1b3268e6b8bee1e700f30dcf088c232ae41e69cd61582be5947&=&format=webp&quality=lossless&width=654&height=600' }
+    ],
+    messages: genChatHistory('richard', me.id, 25),
+    unread: 0,
+    lastStamp: '18:46',
+    lastPreview: '“Woof! ૮₍´｡ᵔ ꈊ ᵔ｡`₎ა”'
   },
   {
     id: 'group-core',
@@ -85,6 +96,28 @@ export const chats = ref<Chat[]>([
     lastPreview: 'Alex: let’s meet at 5!'
   }
 ])
+
+//helper: generate N old messages for mock; newest last
+export function genChatHistory(authorId: string, meId: string, count: number, startIso = '2025-03-28T09:00:00Z') {
+  const out: Message[] = []
+  let t = new Date(startIso).getTime()
+  for (let i = 0; i < count; i++) {
+    const fromPeer = i % 2 === 0
+    out.push({
+      id: 'r' + (i + 1),
+      authorId: fromPeer ? authorId : meId,
+      text: fromPeer
+        ? `msg ${i + 1} from ${authorId}`
+        : `reply ${i + 1}`
+      ,
+      createdAt: new Date(t).toISOString()
+    })
+    //+40–90 seconds between messages
+    t += 1000 * (40 + Math.floor(Math.random() * 25))
+  }
+  return out
+}
+
 
 export function getChatById(id: string) {
   return computed(() => chats.value.find(c => c.id === id))
