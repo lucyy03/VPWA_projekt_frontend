@@ -118,28 +118,6 @@ export const chats = ref<Chat[]>([
     lastPreview: 'Alex: let’s meet at 5!'
   }
 ])
-/*
-//helper: generate N old messages for mock; newest last
-export function genChatHistory(authorId: string, meId: string, count: number, startIso = '2025-03-28T09:00:00Z') {
-  const out: Message[] = []
-  let t = new Date(startIso).getTime()
-  for (let i = 0; i < count; i++) {
-    const fromPeer = i % 2 === 0
-    out.push({
-      id: 'r' + (i + 1),
-      authorId: fromPeer ? authorId : meId,
-      text: fromPeer
-        ? `msg ${i + 1} from ${authorId}`
-        : `reply ${i + 1}`
-      ,
-      createdAt: new Date(t).toISOString()
-    })
-    //+40–90 seconds between messages
-    t += 1000 * (40 + Math.floor(Math.random() * 25))
-  }
-  return out
-}
-*/
 
 export function getChatById(id: string) {
   return computed(() => chats.value.find(c => c.id === id))

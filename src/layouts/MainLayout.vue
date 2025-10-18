@@ -62,12 +62,17 @@
     <q-page-container>
       <router-view />
     </q-page-container>
+
+    <!-- only render on routes that opt in -->
+    <CliOverlay v-if="$route.meta.cli === true" />
+
   </q-layout>
 </template>
 
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import CliOverlay from 'src/components/CliOverlay.vue'
 
 const router = useRouter();
 const leftDrawerOpen = ref(false);

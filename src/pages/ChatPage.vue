@@ -43,6 +43,24 @@
                 :sent="m.authorId === me.id"
                 :stamp="fmt(m.createdAt)"
               />
+
+              <!-- ephemeral (local-only) command outputs -->
+              <QChatMessage
+                v-for="e in ephemerals[chat.id] || []"
+                :key="e.id"
+                :text="[e.text]"
+                :sent="true"
+                :stamp="fmt(e.createdAt)"
+                bg-color="grey-3"
+                text-color="black"
+              >
+                <template #name>
+                  <div class="row items-center no-wrap">
+                    <span class="cmd-chip">private - command output</span>
+                  </div>
+                </template>
+              </QChatMessage>
+
             </div>
 
             <!-- spinner while loading older -->
@@ -117,6 +135,15 @@ defineOptions({ name: 'ChatPage' })
 
 const route = useRoute()
 
+//types for private, local-only command output
+type EphemeralMsg = {
+  id: string
+  text: string
+  createdAt: string
+}
+//per-chat local store (not persisted, not in src/mock/chats.ts)
+const ephemerals = ref<Record<string, EphemeralMsg[]>>({})
+
 const composerEl = ref<HTMLElement|null>(null)
 const composerH = ref(72)
 let ro: ResizeObserver | null = null
@@ -186,6 +213,14 @@ function send() {
   const c = chat.value
   const text = draft.value.trim()
   if (!c || !text) return
+
+  //commands: do not send a message, run locally and return
+  if (text.startsWith('/')) {
+    void tryRunCommand(text)
+    draft.value = ''
+    return
+  }
+
   const msg: Message = {
     id: String(Math.random()).slice(2),
     authorId: me.id,
@@ -393,6 +428,84 @@ async function loadMore(_index: number, done: () => void) {
     isLoading = false
     done()
   }
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////// COMMANDS /////////////////////////////////////////////////////////////////////////////////////////
+//helper: push an ephemeral bubble and scroll if needed
+async function appendEphemeral(text: string) {
+  const c = chat.value
+  if (!c) return
+  const el = scrollEl.value
+  const shouldStick = isNearBottom(el)
+
+  const e: EphemeralMsg = {
+    id: 'e' + String(Math.random()).slice(2),
+    text,
+    createdAt: new Date().toISOString()
+  }
+  if (!ephemerals.value[c.id]) {
+    ephemerals.value[c.id] = [] 
+  }
+  ephemerals.value[c.id]!.push(e)
+
+  await nextTick()
+  if (shouldStick && el) {
+    requestAnimationFrame(() => {
+      el.scrollTop = el.scrollHeight
+    })
+  }
+}
+
+//reset ephemerals when switching chats (local-only)
+watch(
+  () => route.params.id,
+  () => {
+    const c = chat.value
+    if (!c) return
+    if (!ephemerals.value[c.id]) ephemerals.value[c.id] = []
+  },
+  { immediate: true }
+)
+
+//simple command registry
+type CmdHandler = (args: string[]) => Promise<void> | void
+
+const commands: Record<string, CmdHandler> = {
+  //lists members of the current chat
+  async list() {
+    const c = chat.value
+    if (!c) return
+    const names = c.members.map(m => (m.id === me.id ? 'You' : m.name)).join(', ')
+    await appendEphemeral(`members: ${names}`)
+  },
+
+  //help about available commands
+  async help() {
+    await appendEphemeral([
+      'available commands:',
+      '/list - list chat members',
+      '/help - show this help'
+    ].join('\n'))
+  }
+}
+
+//parses "/cmd arg1 arg2" and runs it
+async function tryRunCommand(raw: string): Promise<boolean> {
+  if (!raw.startsWith('/')) return false
+  const parts = raw.trim().slice(1).split(/\s+/)
+  const name = parts[0]?.toLowerCase() || ''
+  const args = parts.slice(1)
+  const handler = commands[name]
+  if (!handler) {
+    await appendEphemeral(`unknown command: /${name} (try /help)`)
+    return true
+  }
+  try {
+    await handler(args)
+  } catch (err) {
+    await appendEphemeral(`error: ${(err as Error)?.message || 'command failed'}`)
+  }
+  return true
 }
 
 </script>
