@@ -10,6 +10,24 @@
         </div>
       </q-avatar>
       <q-toolbar-title>{{ chat?.name ?? 'Chat' }}</q-toolbar-title>
+      <!-- 3-dot menu button -->
+      <q-btn flat round dense icon="more_vert" aria-label="More options">
+        <q-menu anchor="bottom right" self="top right">
+          <q-list style="min-width: 200px">
+            <q-item clickable v-close-popup>
+              <q-item-section avatar><q-icon name="group" /></q-item-section>
+              <q-item-section>Members</q-item-section>
+            </q-item>
+
+            <q-separator />
+
+            <q-item clickable v-close-popup>
+              <q-item-section avatar><q-icon name="logout" /></q-item-section>
+              <q-item-section class="text-negative">Leave chat</q-item-section>
+            </q-item>
+          </q-list>
+        </q-menu>
+      </q-btn>
     </q-toolbar>
 
     <div v-if="!chat" class="column items-center justify-center q-pa-xl">

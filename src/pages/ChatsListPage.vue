@@ -4,7 +4,36 @@
     <q-toolbar class="bg-primary text-white">
       <q-toolbar-title>Chats</q-toolbar-title>
       <q-btn flat round icon="search" />
-      <q-btn flat round icon="more_vert" />
+      
+      <!-- 3-dot button with dropdown menu -->
+      <q-btn flat round dense icon="more_vert" aria-label="More options">
+        <q-menu anchor="bottom right" self="top right">
+          <q-list style="min-width: 220px">
+            <q-item clickable v-close-popup @click="noop()">
+              <q-item-section avatar><q-icon name="add" /></q-item-section>
+              <q-item-section>Create new channel</q-item-section>
+            </q-item>
+
+            <q-item clickable v-close-popup @click="noop()">
+              <q-item-section avatar><q-icon name="person_add" /></q-item-section>
+              <q-item-section>New direct message</q-item-section>
+            </q-item>
+
+            <q-item clickable v-close-popup @click="noop()">
+              <q-item-section avatar><q-icon name="archive" /></q-item-section>
+              <q-item-section>Archived chats</q-item-section>
+            </q-item>
+
+            <q-separator />
+
+            <q-item clickable v-close-popup @click="noop()">
+              <q-item-section avatar><q-icon name="settings" /></q-item-section>
+              <q-item-section>Settings</q-item-section>
+            </q-item>
+          </q-list>
+        </q-menu>
+      </q-btn>
+
     </q-toolbar>
 
     <q-list separator bordered class="bg-white q-mt-sm">
@@ -69,4 +98,10 @@ function getPeerLetter(chat: Chat): string {
 function getPeerColor(chat: Chat): string {
   return getPeer(chat)?.color ?? 'grey-6'
 }
+
+//helper for 3 dot menu
+function noop() {
+  // do nothing
+}
+
 </script>

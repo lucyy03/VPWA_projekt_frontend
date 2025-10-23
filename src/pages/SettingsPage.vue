@@ -41,6 +41,23 @@
 
           <q-separator spaced />
 
+          <!-- notifications for only mentions -->
+          <div class="row items-center justify-between q-py-sm">
+            <div class="col">
+              <div class="text-subtitle1">Notifications for only mentions</div>
+            </div>
+            <div class="col-auto">
+              <q-toggle
+                v-model="mentions"
+                color="primary"
+                label="On / Off"
+                left-label
+              />
+            </div>
+          </div>
+
+          <q-separator spaced />
+
           <!-- visibility -->
           <div class="row items-center justify-between q-py-sm">
             <div class="col">
@@ -77,6 +94,7 @@ const $q = useQuasar()
 
 const darkMode = ref(false)
 const notifications = ref(true)
+const mentions = ref(true)
 const visibility = ref(true)
 
 function onSave() {
