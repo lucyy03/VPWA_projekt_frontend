@@ -111,7 +111,9 @@ export const chats = ref<Chat[]>([
       { id: 'g2', name: 'Kai', color: 'purple' }
     ],
     messages: [
-      { id: 'm1', authorId: 'g1', text: 'let’s meet at 5!', createdAt: '2025-03-30T12:00:00Z' }
+      { id: 'm1', authorId: 'g1', text: 'let’s meet at 5!', createdAt: '2025-03-30T12:00:00Z' },
+      { id: 'm1', authorId: 'g1', text: '@You', createdAt: '2025-03-30T12:00:00Z' },
+      { id: 'm1', authorId: 'g1', text: '@someone_else', createdAt: '2025-03-30T12:00:00Z' }
     ],
     unread: 0,
     lastStamp: 'Mon',

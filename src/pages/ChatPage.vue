@@ -42,6 +42,8 @@
                 :text="[m.text]"
                 :sent="m.authorId === me.id"
                 :stamp="fmt(m.createdAt)"
+                :bg-color="isMention(m) ? 'amber-2' : undefined"
+                :text-color="isMention(m) ? 'black' : undefined"
               />
 
               <!-- ephemeral (local-only) command outputs -->
@@ -248,15 +250,11 @@ function simulatePeerTypingAndReply() {
 
   // choose a reply text up front so we can stream it char by char
   const replies: string[] = [
-    'ok',
-    'sounds good',
-    'see you!',
-    '👍',
-    'nice',
-    'give me 10 mins',
-    'on my way',
-    'yup, got it',
-    'let me check'
+    'sounds good, i will see you there',
+    'give me 10 mins and i will be there',
+    'on my way, i will be there soon',
+    'yup, got it, on the way already',
+    'let me check the bus schedule'
   ]
   const fullText: string = replies[Math.floor(Math.random() * replies.length)]!
 
@@ -506,6 +504,21 @@ async function tryRunCommand(raw: string): Promise<boolean> {
     await appendEphemeral(`error: ${(err as Error)?.message || 'command failed'}`)
   }
   return true
+}
+
+// helper for highlighting mentions
+function escapeRe(s: string) {
+  /* escapes special regex chars */
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function isMention(m: Message): boolean {
+  const c = chat.value
+  if (!c) return false
+  if (m.authorId === me.id) return false
+  const handle = '@' + me.name
+  const re = new RegExp(`(^|\\s)${escapeRe(handle)}(\\b|\\s|$)`, 'i')
+  return re.test(m.text)
 }
 
 </script>
