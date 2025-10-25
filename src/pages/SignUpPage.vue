@@ -1,7 +1,7 @@
 <template>
-  <q-page class="flex flex-center">
+  <q-page class="flex flex-center" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
     <q-card style="width:360px;max-width:90vw">
-      <q-card-section class="text-h6">Welcome</q-card-section>
+      <q-card-section class="text-h6 text-center" style="background-color: black; color: white;">✩°｡⋆ Sign Up to Daze ⋆｡°✩</q-card-section>
       <q-separator />
       <q-card-section class="q-gutter-md">
         <q-input
@@ -42,7 +42,7 @@
           <q-btn
             :loading="loading"
             label="Sign Up"
-            color="primary"
+            color="black"
             style="width: 280px"
             @click="onSubmit"
           />

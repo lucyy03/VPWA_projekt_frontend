@@ -1,6 +1,6 @@
 <!-- src/pages/ChatsPage.vue -->
 <template>
-  <q-page style="background-color: #c0c0c0;">
+  <q-page :style="{ background: 'linear-gradient(135deg, #a3bffa 0%, #c3aed6 100%)', color: '#222', backgroundAttachment: 'fixed' }">
     <q-toolbar class="bg-dark text-white">
       <q-toolbar-title>
         <img src="https://media.discordapp.net/attachments/787479869339860995/1431612842498326560/1761393489701.png?ex=68fe0cdb&is=68fcbb5b&hm=1438a173dbdf890d128b8d96eb4aebd99136dff7b0358fd71e332c5af15b1b39&=&format=webp&quality=lossless&width=540&height=540" alt="Chats Logo" style="height: 32px; vertical-align: middle; margin-right: 8px" />
@@ -38,7 +38,7 @@
 
     </q-toolbar>
 
-    <q-list separator bordered class="bg-white q-mt-sm">
+    <q-list separator bordered class="bg-white">
       <q-item
         v-for="chat in chats"
         :key="chat.id"

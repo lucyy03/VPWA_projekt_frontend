@@ -1,10 +1,10 @@
 <template>
-  <q-page padding class="bg-grey-1">
+  <q-page padding :style="{ background: 'linear-gradient(135deg, #a3bffa 0%, #c3aed6 100%)', color: '#222', backgroundAttachment: 'fixed' }">
     <div class="row justify-center">
       <div class="col-12 col-sm-8 col-md-6">
         <q-card flat bordered class="q-pa-lg">
 
-          <div class="text-h5 q-mb-md">Settings</div>
+          <div class="text-h5 q-mb-md text-bold text-center">Settings</div>
           <q-separator spaced />
 
           <!-- dark mode -->
@@ -15,7 +15,7 @@
             <div class="col-auto">
               <q-toggle
                 v-model="darkMode"
-                color="primary"
+                color="black"
                 checked-icon="dark_mode"
                 unchecked-icon="light_mode"
               />
@@ -32,7 +32,7 @@
             <div class="col-auto">
               <q-toggle
                 v-model="notifications"
-                color="primary"
+                color="black"
                 label="Off / On"
                 left-label
               />
@@ -49,7 +49,7 @@
             <div class="col-auto">
               <q-toggle
                 v-model="mentions"
-                color="primary"
+                color="black"
                 label="Off / On"
                 left-label
               />
@@ -66,7 +66,7 @@
             <div class="col-auto">
               <q-toggle
                 v-model="visibility"
-                color="primary"
+                color="black"
                 label="Off / On"
                 left-label
               />
@@ -76,7 +76,7 @@
           <q-separator spaced />
 
           <div class="text-center q-mt-md">
-            <q-btn label="Save Settings" color="primary" unelevated @click="onSave" />
+            <q-btn label="Save Settings" color="black" unelevated @click="onSave" />
           </div>
 
         </q-card>

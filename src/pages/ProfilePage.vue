@@ -1,10 +1,9 @@
 <!-- src/pages/ProfilePage.vue -->
 <template>
-  <q-page padding class="bg-grey-1">
+  <q-page padding :style="{ background: 'linear-gradient(135deg, #a3bffa 0%, #c3aed6 100%)', color: '#222', backgroundAttachment: 'fixed' }">
     <div class="row justify-center">
       <div class="col-12 col-sm-8 col-md-6">
-        <q-card flat bordered class="q-pa-lg">
-
+        <q-card flat bordered class="q-pa-lg" :style="{ backgroundColor: 'white', color: '#222', border: '2px solid #a3bffa', borderRadius: '12px' }">
           <!-- avatar + basic info -->
           <div class="row items-center q-col-gutter-md">
             <div class="col-auto">
@@ -13,9 +12,9 @@
               </q-avatar>
             </div>
             <div class="col">
-              <div class="text-h5">Jim Halpert</div>
-              <div class="text-subtitle2 text-grey-7">@bigtuna42</div>
-              <div class="text-caption text-grey-7">jim.halpert@office.com</div>
+              <div class="text-h5 text-bold text-black">Jim Halpert</div>
+              <div class="text-subtitle2 text-grey-9">@bigtuna42</div>
+              <div class="text-caption text-grey-9">jim.halpert@office.com</div>
             </div>
           </div>
 
@@ -26,21 +25,21 @@
 
             <div>
               <div class="text-subtitle1 text-bold">Bio</div>
-              <div class="text-body2 text-grey-8">
+              <div class="text-body2 text-grey-9">
                   Bears. Beets. Battlestar Galactica.
               </div>
             </div>
 
             <div>
               <div class="text-subtitle1 text-bold">Joined</div>
-              <div class="text-body2 text-grey-8">October, 2025</div>
+              <div class="text-body2 text-grey-9">October, 2025</div>
             </div>
           </div>
 
           <q-separator spaced />
 
           <div class="text-center q-mt-md">
-            <q-btn color="primary" label="Edit profile" icon="edit" unelevated />
+            <q-btn color="black" label="Edit profile" icon="edit" unelevated />
           </div>
         </q-card>
       </div>
