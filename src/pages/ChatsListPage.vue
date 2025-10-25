@@ -82,28 +82,18 @@
 </template>
 
 <script setup lang="ts">
-// no backend; list pulls from shared mock data
-import { chats, me, type Chat, type Member } from 'src/mock/chats'
+/* no backend; list pulls from shared mock data */
+import { chats } from 'src/mock/chats'
+import { useChatsStore } from 'src/stores/chats'
 
 defineOptions({ name: 'ChatsPage' })
 
-//helpers return safe primitives so templates never pass undefined
-function getPeer(chat: Chat): Member | undefined {
-	return chat.members.find(m => m.id !== me.id) ?? chat.members[0]
-}
-function getPeerImg(chat: Chat): string | undefined {
-	return getPeer(chat)?.avatar ?? undefined
-}
-function getPeerLetter(chat: Chat): string {
-	const name = getPeer(chat)?.name ?? '?'
-	return name.charAt(0).toUpperCase()
-}
-function getPeerColor(chat: Chat): string {
-	return getPeer(chat)?.color ?? 'grey-6'
-}
+const chatsStore = useChatsStore()
+const { getPeerImg, getPeerLetter, getPeerColor } = chatsStore
 
 //helper for 3 dot menu
 function noop() {
-	// do nothing
+  // do nothing
 }
+
 </script>

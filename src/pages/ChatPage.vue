@@ -60,8 +60,8 @@
                 :text="[m.text]"
                 :sent="m.authorId === me.id"
                 :stamp="fmt(m.createdAt)"
-                :bg-color="isMention(m) ? 'amber-2' : (m.authorId === me.id ? 'orange-2' : 'teal-3')"
-                :text-color="isMention(m) ? 'black' : undefined"
+                :bg-color="m.authorId === me.id ? 'primary' : isMention(m) ? 'amber-3' : 'grey-4'"
+                :text-color="m.authorId === me.id ? 'white' : 'black'"
               />
 
               <!-- ephemeral (local-only) command outputs -->
@@ -150,18 +150,15 @@ import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { QChatMessage, QSpinnerDots, QInfiniteScroll } from 'quasar'
 import { chats, me, type Member, type Message } from 'src/mock/chats'
+import { useChatsStore } from 'src/stores/chats'
 
 defineOptions({ name: 'ChatPage' })
 
 const route = useRoute()
+const chatsStore = useChatsStore()
 
 //types for private, local-only command output
-type EphemeralMsg = {
-  id: string
-  text: string
-  createdAt: string
-}
-//per-chat local store (not persisted, not in src/mock/chats.ts)
+type EphemeralMsg = { id: string; text: string; createdAt: string }
 const ephemerals = ref<Record<string, EphemeralMsg[]>>({})
 
 const composerEl = ref<HTMLElement|null>(null)
@@ -192,76 +189,63 @@ onBeforeUnmount(() => {
   ro = null
 })
 
-// look up the chat reactively based on :id
+//look up the chat reactively based on :id
 const chat = computed(() => {
   const id = String(route.params.id)
-  const found = chats.value.find(c => c.id === id)
-  // console.log('[ChatPage] route id =', id, '| found chat id =', found?.id, '| messages =', found?.messages?.length)
-  return found
+  return chats.value.find(c => c.id === id)
 })
 
 const draft = ref('')
 
-// header avatar logic
-const peer = computed<Member | undefined>(() =>
-  chat.value?.isGroup ? undefined : chat.value?.members.find(m => m.id !== me.id)
-)
+//header avatar logic now uses the thin store helper for peer
+const peer = computed<Member | undefined>(() => chat.value ? chatsStore.getPeer(chat.value) : undefined)
 const headerAvatarUrl = computed(() => peer.value?.avatar)
-const headerLetter = computed(() =>
-  !peer.value?.avatar ? (peer.value?.name?.charAt(0).toUpperCase() ?? '') : ''
-)
+const headerLetter = computed(() => !peer.value?.avatar ? (peer.value?.name?.charAt(0).toUpperCase() ?? '') : '')
 
-// helpers for bubbles
+//helpers now call the store
 function nameOf(authorId: string) {
-  return chat.value?.members.find(n => n.id === authorId)?.name || 'user'
+  if (!chat.value) return 'user'
+  return chatsStore.nameOf(chat.value.id, authorId)
 }
 function avatarOf(authorId: string) {
-  const m = chat.value?.members.find(n => n.id === authorId)
-  if (!m) return undefined
-  // don't show avatar for 'me'
-  if (m.id === me.id) return undefined
-  // if user has avatar image, return it
-  if (m.avatar) return m.avatar
-  return undefined
+  if (!chat.value) return undefined
+  return chatsStore.avatarOf(chat.value.id, authorId)
 }
-
 function fmt(iso: string) {
-  try { return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) } catch { return '' }
+  return chatsStore.fmt(iso)
 }
 
+//send now delegates message creation to the store, then the page appends to its local window/scroll
 function send() {
   const c = chat.value
   const text = draft.value.trim()
   if (!c || !text) return
 
-  //commands: do not send a message, run locally and return
+  //commands handled by store; we inject our local appendEphemeral
   if (text.startsWith('/')) {
-    void tryRunCommand(text)
+    void chatsStore.tryRunCommand(c.id, text, appendEphemeral)
     draft.value = ''
     return
   }
 
-  const msg: Message = {
-    id: String(Math.random()).slice(2),
-    authorId: me.id,
-    text,
-    createdAt: new Date().toISOString()
+  const msg = chatsStore.createAndPushMessage(c.id, me.id, text)
+  if (msg) {
+    void appendMessage(msg, { force: true })
   }
-   void appendMessage(msg, { force: true })
   draft.value = ''
-  simulatePeerTypingAndReply() // trigger fake typing + reply
+  simulatePeerTypingAndReply() //unchanged
 }
 
-
-// typing simulation state
+//typing simulation state unchanged...
 const remoteTyping = ref(false)
-const remoteDraft = ref('')           // live text being "typed"
-const showTypingPreview = ref(false)  // toggled by clicking indicator
+const remoteDraft = ref('')
+const showTypingPreview = ref(false)
 let typingTimer: ReturnType<typeof setTimeout> | null = null
 let typingInterval: ReturnType<typeof setInterval> | null = null
 
 const peerName = computed(() => peer.value?.name ?? 'Someone')
 
+//simulatePeerTypingAndReply stays here (ui timing/intervals/dom) and still uses appendMessage
 function simulatePeerTypingAndReply() {
   const c = chat.value
   if (!c) return
@@ -358,19 +342,13 @@ function simulatePeerTypingAndReply() {
   typingInterval = setInterval(() => {
     // stop if chat changed or typing was cancelled
     if (!remoteTyping.value) return
-    if (i < chars.length) {
-      remoteDraft.value += chars[i++]
-    }
-  }, 120) // adjust speed here
+    if (i < chars.length) remoteDraft.value += chars[i++]
+  }, 120)
 
-  // finish typing, clear interval, then push the message
   if (typingTimer) clearTimeout(typingTimer)
   typingTimer = setTimeout(() => {
     remoteTyping.value = false
-    if (typingInterval) {
-      clearInterval(typingInterval)
-      typingInterval = null
-    }
+    if (typingInterval) { clearInterval(typingInterval); typingInterval = null }
     const authorId = peer.value?.id ?? 'peer'
     const reply: Message = {
       id: String(Math.random()).slice(2),
@@ -378,33 +356,29 @@ function simulatePeerTypingAndReply() {
       text: fullText,
       createdAt: new Date().toISOString()
     }
+    //also push into the source of truth so history is correct
+    c.messages.push(reply)
     void appendMessage(reply)
     remoteDraft.value = ''
   }, typingMs)
 }
 
-// helper: scroll to bottom when showing typing preview
+//helper: scroll to bottom when showing typing preview unchanged...
 async function toggleTypingPreview() {
   showTypingPreview.value = !showTypingPreview.value
   await nextTick()
   const el = scrollEl.value
-  if (el) {
-    // same logic as appendMessage: scroll if near bottom or forcing
-    requestAnimationFrame(() => {
-    el.scrollTop = el.scrollHeight
-    })
-  }
+  if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
 }
 
-
-//helper: check if youre at the bottom when sending
+//near-bottom check unchanged...
 function isNearBottom(el: HTMLElement | null, thresh = 40) {
   if (!el) return false
   const delta = el.scrollHeight - (el.scrollTop + el.clientHeight)
   return delta <= thresh
 }
 
-//helper: append a message to both source & visible, then scroll down
+//appendMessage unchanged except the source push moved to store above for sends; here we keep window/scroll
 async function appendMessage(msg: Message, opts: { force?: boolean } = {}) {
   const c = chat.value
   if (!c) return
@@ -412,32 +386,20 @@ async function appendMessage(msg: Message, opts: { force?: boolean } = {}) {
   // scroll if user was near bottom OR if forced (for our own sends)
   const shouldStick = (opts.force === true) || isNearBottom(el)
 
-  c.messages.push(msg)
-  visible.value = [...visible.value, msg]     // keep window in sync
+  //the chat array was already updated by store (for sends) or here (for replies)
+  visible.value = [...visible.value, msg]
   await nextTick()
   if (shouldStick && el) {
-    requestAnimationFrame(() => {
-      el.scrollTop = el.scrollHeight
-    })
+    requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
   }
 }
 
 //infinite scroll stuff
 const FAKE_LATENCY_MS = 450
-function sleep(ms: number) {
-  return new Promise<void>(r => setTimeout(r, ms))
-}
-
+function sleep(ms: number) { return new Promise<void>(r => setTimeout(r, ms)) }
 const CHUNK = 25
-// const VIRTUAL_CAP = 5000
-
-//local window of messages shown
 const visible = ref<Message[]>([])
-
-//track how many messages from the bottom are already loaded
-// const loadedFrom = ref(0)
-const firstIndex = ref(0) //index in c.messages of visible[0]
-
+const firstIndex = ref(0)
 const inf = ref<InstanceType<typeof QInfiniteScroll> | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 let isLoading = false
@@ -447,12 +409,7 @@ watch(
   () => route.params.id,
   async () => {
     const c = chat.value
-    if (!c) {
-      visible.value = []
-      return
-    }
-
-    //start with the last CHUNK messages
+    if (!c) { visible.value = []; return }
     const total = c.messages.length
     firstIndex.value = Math.max(0, total - CHUNK)
     visible.value = c.messages.slice(firstIndex.value)
@@ -469,7 +426,7 @@ watch(
 
 //load older when reaching the top
 async function loadMore(_index: number, done: () => void) {
-  if (isLoading) { done(); return }  // prevent concurrent loads
+  if (isLoading) { done(); return }
   isLoading = true
   try {
     const c = chat.value
@@ -513,8 +470,7 @@ async function loadMore(_index: number, done: () => void) {
   }
 }
 
-///////////////////////////////////////////////////////////////////////////////////////////// COMMANDS /////////////////////////////////////////////////////////////////////////////////////////
-//helper: push an ephemeral bubble and scroll if needed
+//ephemerals now kept in the page, but commands come from the store and call this via injection
 async function appendEphemeral(text: string) {
   const c = chat.value
   if (!c) return
@@ -550,60 +506,11 @@ watch(
   { immediate: true }
 )
 
-//simple command registry
-type CmdHandler = (args: string[]) => Promise<void> | void
-
-const commands: Record<string, CmdHandler> = {
-  //lists members of the current chat
-  async list() {
-    const c = chat.value
-    if (!c) return
-    const names = c.members.map(m => (m.id === me.id ? 'You' : m.name)).join(', ')
-    await appendEphemeral(`members: ${names}`)
-  },
-
-  //help about available commands
-  async help() {
-    await appendEphemeral([
-      'available commands:',
-      '/list - list chat members',
-      '/help - show this help'
-    ].join('\n'))
-  }
-}
-
-//parses "/cmd arg1 arg2" and runs it
-async function tryRunCommand(raw: string): Promise<boolean> {
-  if (!raw.startsWith('/')) return false
-  const parts = raw.trim().slice(1).split(/\s+/)
-  const name = parts[0]?.toLowerCase() || ''
-  const args = parts.slice(1)
-  const handler = commands[name]
-  if (!handler) {
-    await appendEphemeral(`unknown command: /${name} (try /help)`)
-    return true
-  }
-  try {
-    await handler(args)
-  } catch (err) {
-    await appendEphemeral(`error: ${(err as Error)?.message || 'command failed'}`)
-  }
-  return true
-}
-
-// helper for highlighting mentions
-function escapeRe(s: string) {
-  /* escapes special regex chars */
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-}
-
+//mention highlight now calls the store
 function isMention(m: Message): boolean {
   const c = chat.value
   if (!c) return false
-  if (m.authorId === me.id) return false
-  const handle = '@' + me.name
-  const re = new RegExp(`(^|\\s)${escapeRe(handle)}(\\b|\\s|$)`, 'i')
-  return re.test(m.text)
+  return chatsStore.isMention(c.id, m)
 }
 
 </script>

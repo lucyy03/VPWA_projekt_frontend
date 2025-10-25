@@ -81,6 +81,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from 'src/stores/auth'
 
 const router = useRouter()
 const email = ref('')
@@ -89,11 +90,18 @@ const loading = ref(false)
 const error = ref('')
 const first_name = ref('')
 const last_name = ref('')
+const auth = useAuthStore()
 
 function onSubmit() {
+	//call store bu keep navigation here
 	loading.value = true
 	error.value = ''
-	loading.value = false
-	void router.push('/chats')
+	try {
+		const fullName = `${first_name.value} ${last_name.value}`.trim()
+		auth.signup(fullName, email.value, password.value)
+		void router.push('/chats')
+	} finally {
+		loading.value = false
+	}
 }
 </script>

@@ -98,18 +98,21 @@ import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import CliOverlay from 'src/components/CliOverlay.vue'
 import { useQuasar } from 'quasar'
+import { useAuthStore } from 'src/stores/auth'
 
 const router = useRouter();
 const leftDrawerOpen = ref(false);
 const $q = useQuasar()
+const auth = useAuthStore()
 
+// ui only
 function toggleLeftDrawer() {
   leftDrawerOpen.value = !leftDrawerOpen.value;
 }
 
 async function logout() {
-  // handle logout later
-  console.log('User logged out');
+  // call the store but keep router push here
+  auth.logout()
   await router.push('/login');
 }
 
