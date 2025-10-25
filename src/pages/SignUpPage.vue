@@ -38,13 +38,15 @@
           @keyup.enter="onSubmit"
         />
 
-        <q-btn
-          :loading="loading"
-          label="Sign Up"
-          color="primary"
-          class="full-width"
-          @click="onSubmit"
-        />
+        <div class="flex column items-center q-gutter-md q-mx-none">
+          <q-btn
+            :loading="loading"
+            label="Sign Up"
+            color="primary"
+            style="width: 280px"
+            @click="onSubmit"
+          />
+        </div>
 
         <div v-if="error" class="text-negative text-caption">{{ error }}</div>
       </q-card-section>

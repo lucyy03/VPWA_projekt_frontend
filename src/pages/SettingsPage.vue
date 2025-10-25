@@ -33,7 +33,7 @@
               <q-toggle
                 v-model="notifications"
                 color="primary"
-                label="On / Off"
+                label="Off / On"
                 left-label
               />
             </div>
@@ -50,7 +50,7 @@
               <q-toggle
                 v-model="mentions"
                 color="primary"
-                label="On / Off"
+                label="Off / On"
                 left-label
               />
             </div>
@@ -67,7 +67,7 @@
               <q-toggle
                 v-model="visibility"
                 color="primary"
-                label="On / Off"
+                label="Off / On"
                 left-label
               />
             </div>

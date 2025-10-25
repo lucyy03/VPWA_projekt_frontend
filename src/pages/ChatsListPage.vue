@@ -1,8 +1,10 @@
 <!-- src/pages/ChatsPage.vue -->
 <template>
-  <q-page class="bg-grey-2">
-    <q-toolbar class="bg-primary text-white">
-      <q-toolbar-title>Chats</q-toolbar-title>
+  <q-page style="background-color: #c0c0c0;">
+    <q-toolbar class="bg-dark text-white">
+      <q-toolbar-title>
+        <img src="https://media.discordapp.net/attachments/787479869339860995/1431612842498326560/1761393489701.png?ex=68fe0cdb&is=68fcbb5b&hm=1438a173dbdf890d128b8d96eb4aebd99136dff7b0358fd71e332c5af15b1b39&=&format=webp&quality=lossless&width=540&height=540" alt="Chats Logo" style="height: 32px; vertical-align: middle; margin-right: 8px" />
+        Chats</q-toolbar-title>
       <q-btn flat round icon="search" />
       
       <!-- 3-dot button with dropdown menu -->
@@ -71,7 +73,7 @@
 
         <q-item-section side top>
           <q-item-label caption class="text-grey">{{ chat.lastStamp }}</q-item-label>
-          <q-badge v-if="chat.unread" color="primary" :label="chat.unread" />
+          <q-badge v-if="chat.unread" color="red" :label="chat.unread" />
         </q-item-section>
       </q-item>
     </q-list>
