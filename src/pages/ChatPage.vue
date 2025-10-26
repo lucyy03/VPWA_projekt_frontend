@@ -27,7 +27,7 @@
       <q-btn flat round dense icon="more_vert" aria-label="More options">
         <q-menu anchor="bottom right" self="top right">
           <q-list style="min-width: 200px">
-            <q-item v-if="chat?.isGroup && chat?.visibility === 'public'" clickable v-close-popup @click="addMember(chat!.id)">
+            <q-item v-if="chat?.isGroup && (chat?.visibility === 'public' || chat?.adminId === me.id)" clickable v-close-popup @click="addMember(chat!.id)">
               <q-item-section avatar><q-icon name="person_add" /></q-item-section>
               <q-item-section>Add member</q-item-section>
             </q-item>
@@ -38,7 +38,12 @@
 
             <q-separator />
 
-            <q-item clickable v-close-popup>
+            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="chatsStore.deleteChat(chat!.id)">
+              <q-item-section avatar><q-icon name="delete" /></q-item-section>
+              <q-item-section class="text-negative">Delete chat</q-item-section>
+            </q-item>
+
+            <q-item v-else clickable v-close-popup>
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
               <q-item-section class="text-negative">Leave chat</q-item-section>
             </q-item>
@@ -276,7 +281,7 @@ function simulatePeerTypingAndReply() {
     'yup, got it, on the way already',
     'let me check the bus schedule',
     'hey hey 👋 what’s up? you doing alrigth?',
-	  'ohhh gotcha, that makes sense now',
+    'ohhh gotcha, that makes sense now',
     'yeah, I totally get what you mean',
     'wait seriously?? no way, I can’t believe this',
     'lol no way that actually cracked me up',
@@ -516,7 +521,7 @@ function isMention(m: Message): boolean {
 
 //public or private indicator
 const chipColor = computed(() => {
-	return chat.value?.visibility === 'public' ? 'positive' : 'grey-6'
+  return chat.value?.visibility === 'public' ? 'positive' : 'grey-6'
 })
 
 </script>

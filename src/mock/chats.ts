@@ -20,6 +20,7 @@ export type Chat = {
   lastStamp: string
   lastPreview: string
   visibility?: 'public' | 'private'
+  adminId?: string
 }
 
 export const me: Member = { id: 'me', name: 'You', avatar: 'https://cdn.quasar.dev/img/boy-avatar.png' }
@@ -107,6 +108,7 @@ export const chats = ref<Chat[]>([
     name: 'Group Chat private',
     isGroup: true,
     visibility: 'private',
+    adminId: 'g1',
     members: [
       me,
       { id: 'g1', name: 'Alex', color: 'orange' },
@@ -126,6 +128,7 @@ export const chats = ref<Chat[]>([
     name: 'Group Chat public',
     isGroup: true,
     visibility: 'public',
+    adminId: 'g11',
     members: [
       me,
       { id: 'g11', name: 'Adam', color: 'orange' },
@@ -139,7 +142,26 @@ export const chats = ref<Chat[]>([
     unread: 0,
     lastStamp: 'Mon',
     lastPreview: 'Adam: this a public group right'
-  }
+  },
+  {
+		id: 'group-me-admin',
+		name: 'Group admin test',
+		isGroup: true,
+		visibility: 'private',
+		adminId: 'me',
+		members: [
+			me,
+			{ id: 'dev1', name: 'Jordan', color: 'purple' },
+			{ id: 'dev2', name: 'Sam', color: 'teal' }
+		],
+		messages: [
+			{ id: 'm1', authorId: 'dev1', text: 'morning team!', createdAt: '2025-03-30T08:00:00Z' },
+			{ id: 'm2', authorId: 'me', text: 'morning! let’s sync up soon', createdAt: '2025-03-30T08:01:00Z' }
+		],
+		unread: 0,
+		lastStamp: 'Mon',
+		lastPreview: 'You: morning! let’s sync up soon'
+	}
 ])
 
 export function getChatById(id: string) {

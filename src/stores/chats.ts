@@ -119,6 +119,10 @@ export const useChatsStore = defineStore('chats', () => {
 		console.log('[chatsStore] addMember requested for chat:', chatId)
 	}
 
+	function deleteChat(chatId: string): void {
+		console.log('[chatsStore] addMember requested for chat:', chatId)
+	}
+
 	return {
 		//pure helpers
 		fmt,
@@ -135,6 +139,7 @@ export const useChatsStore = defineStore('chats', () => {
 		getPeerImg,
 		getPeerLetter,
 		getPeerColor,
-		addMember
+		addMember,
+		deleteChat
 	}
 })
