@@ -47,6 +47,7 @@
 				clickable
 				v-ripple
 				:to="`/chats/${chat.id}`"
+				:style="isNew(chat) ? 'border-left:4px solid var(--q-primary);' : ''"
 			>
 				<q-item-section avatar>
 					<!-- 1:1 avatar -->
@@ -68,12 +69,14 @@
 				</q-item-section>
 
 				<q-item-section>
-					<q-item-label>{{ chat.name }}</q-item-label>
-					<q-item-label caption lines="1">{{ chat.lastPreview }}</q-item-label>
+					<q-item-label :class="{ 'text-weight-bold': isNew(chat) }">{{ chat.name }}</q-item-label>
+					<q-item-label caption lines="1" :class="{ 'text-weight-bold': isNew(chat) }">{{ chat.lastPreview }}</q-item-label>
 				</q-item-section>
 
 				<q-item-section side top>
 					<q-item-label caption>{{ chat.lastStamp }}</q-item-label>
+					<!-- show NEW badge when Lucia is the new chat -->
+					<q-badge v-if="isNew(chat)" color="primary" outline label="NEW" class="q-mt-xs" />
 					<q-badge v-if="chat.unread" color="red" :label="chat.unread" />
 				</q-item-section>
 			</q-item>
@@ -89,7 +92,7 @@ import { useChatsStore } from 'src/stores/chats'
 defineOptions({ name: 'ChatsPage' })
 
 const chatsStore = useChatsStore()
-const { getPeerImg, getPeerLetter, getPeerColor } = chatsStore
+const { getPeerImg, getPeerLetter, getPeerColor, isNew } = chatsStore
 
 //helper for 3 dot menu
 function noop() {

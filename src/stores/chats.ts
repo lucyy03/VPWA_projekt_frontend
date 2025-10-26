@@ -39,6 +39,13 @@ export const useChatsStore = defineStore('chats', () => {
 		return re.test(m.text)
 	}
 
+	//marks a chat as visually new, currently simulates lucia as new
+	function isNew(chat: Chat | string): boolean {
+		//accepts chat object or id to be flexible in templates
+		const id = typeof chat === 'string' ? chat : chat.id
+		return id === 'lucia'
+	}
+
 	//message creation: keep behavior, but return the msg so the component can update its local window
 	function createAndPushMessage(chatId: string, authorId: string, text: string): Message | null {
 		const c = chats.value.find(c => c.id === chatId)
@@ -114,6 +121,7 @@ export const useChatsStore = defineStore('chats', () => {
 		nameOf,
 		avatarOf,
 		isMention,
+		isNew,
 		//message ops
 		createAndPushMessage,
 		//commands
