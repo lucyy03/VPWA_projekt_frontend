@@ -123,6 +123,14 @@ export const useChatsStore = defineStore('chats', () => {
 		console.log('[chatsStore] addMember requested for chat:', chatId)
 	}
 
+	function kickMember(chatId: string): void {
+		console.log(`[store] kickMember called for chat: ${chatId}`)
+	}
+
+	function banMember(chatId: string): void {
+		console.log(`[store] banMember called for chat: ${chatId}`)
+	}
+
 	return {
 		//pure helpers
 		fmt,
@@ -140,6 +148,8 @@ export const useChatsStore = defineStore('chats', () => {
 		getPeerLetter,
 		getPeerColor,
 		addMember,
-		deleteChat
+		deleteChat,
+		kickMember,
+		banMember
 	}
 })

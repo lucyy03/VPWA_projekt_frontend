@@ -27,7 +27,8 @@
       <q-btn flat round dense icon="more_vert" aria-label="More options">
         <q-menu anchor="bottom right" self="top right">
           <q-list style="min-width: 200px">
-            <q-item v-if="chat?.isGroup && (chat?.visibility === 'public' || chat?.adminId === me.id)" clickable v-close-popup @click="addMember(chat!.id)">
+            <q-item
+              v-if="chat?.isGroup && (chat?.visibility === 'public' || chat?.adminId === me.id)" clickable v-close-popup @click="addMember(chat!.id)">
               <q-item-section avatar><q-icon name="person_add" /></q-item-section>
               <q-item-section>Add member</q-item-section>
             </q-item>
@@ -35,10 +36,27 @@
               <q-item-section avatar><q-icon name="group" /></q-item-section>
               <q-item-section>Members</q-item-section>
             </q-item>
+            <!-- admin kick and ban -->
+            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="kickMember(chat!.id)">
+              <q-item-section avatar><q-icon name="remove_circle" /></q-item-section>
+              <q-item-section>Kick member</q-item-section>
+            </q-item>
+
+            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="banMember(chat!.id)">
+              <q-item-section avatar><q-icon name="block" /></q-item-section>
+              <q-item-section>Ban member</q-item-section>
+            </q-item>
+
+            <!-- non-admin group members vote kick -->
+            <q-item
+              v-if="chat?.isGroup && chat?.adminId !== me.id" clickable v-close-popup @click="console.log('[ui] vote kick requested for', chat!.id)">
+              <q-item-section avatar><q-icon name="how_to_vote" /></q-item-section>
+              <q-item-section>Vote kick</q-item-section>
+            </q-item>
 
             <q-separator />
 
-            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="chatsStore.deleteChat(chat!.id)">
+            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="deleteChat(chat!.id)">
               <q-item-section avatar><q-icon name="delete" /></q-item-section>
               <q-item-section class="text-negative">Delete chat</q-item-section>
             </q-item>
@@ -179,6 +197,9 @@ defineOptions({ name: 'ChatPage' })
 const route = useRoute()
 const chatsStore = useChatsStore()
 const { addMember } = chatsStore
+const { deleteChat } = chatsStore
+const { kickMember } = chatsStore
+const { banMember } = chatsStore
 
 //types for private, local-only command output
 type EphemeralMsg = { id: string; text: string; createdAt: string }
