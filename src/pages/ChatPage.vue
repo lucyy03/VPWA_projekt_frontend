@@ -9,11 +9,28 @@
           {{ headerLetter }}
         </div>
       </q-avatar>
-      <q-toolbar-title>{{ chat?.name ?? 'Chat' }}</q-toolbar-title>
+      <q-toolbar-title>
+        <div class="row items-center no-wrap">
+          <span>{{ chat?.name ?? 'Chat' }}</span>
+          <q-chip
+            v-if="chat?.isGroup"
+            dense
+            square
+            outline
+            class="q-ml-sm"
+            :color="chipColor"
+            :label="(chat?.visibility ?? 'private').toUpperCase()"
+          />
+        </div>
+      </q-toolbar-title>
       <!-- 3-dot menu button -->
       <q-btn flat round dense icon="more_vert" aria-label="More options">
         <q-menu anchor="bottom right" self="top right">
           <q-list style="min-width: 200px">
+            <q-item v-if="chat?.isGroup && chat?.visibility === 'public'" clickable v-close-popup @click="addMember(chat!.id)">
+              <q-item-section avatar><q-icon name="person_add" /></q-item-section>
+              <q-item-section>Add member</q-item-section>
+            </q-item>
             <q-item clickable v-close-popup>
               <q-item-section avatar><q-icon name="group" /></q-item-section>
               <q-item-section>Members</q-item-section>
@@ -156,6 +173,7 @@ defineOptions({ name: 'ChatPage' })
 
 const route = useRoute()
 const chatsStore = useChatsStore()
+const { addMember } = chatsStore
 
 //types for private, local-only command output
 type EphemeralMsg = { id: string; text: string; createdAt: string }
@@ -495,5 +513,10 @@ function isMention(m: Message): boolean {
   if (!c) return false
   return chatsStore.isMention(c.id, m)
 }
+
+//public or private indicator
+const chipColor = computed(() => {
+	return chat.value?.visibility === 'public' ? 'positive' : 'grey-6'
+})
 
 </script>

@@ -115,6 +115,10 @@ export const useChatsStore = defineStore('chats', () => {
 		return getPeer(chat)?.color ?? 'grey-6'
 	}
 
+	function addMember(chatId: string): void {
+		console.log('[chatsStore] addMember requested for chat:', chatId)
+	}
+
 	return {
 		//pure helpers
 		fmt,
@@ -130,6 +134,7 @@ export const useChatsStore = defineStore('chats', () => {
 		getPeer,
 		getPeerImg,
 		getPeerLetter,
-		getPeerColor
+		getPeerColor,
+		addMember
 	}
 })

@@ -19,6 +19,7 @@ export type Chat = {
   unread: number
   lastStamp: string
   lastPreview: string
+  visibility?: 'public' | 'private'
 }
 
 export const me: Member = { id: 'me', name: 'You', avatar: 'https://cdn.quasar.dev/img/boy-avatar.png' }
@@ -103,8 +104,9 @@ export const chats = ref<Chat[]>([
   },
   {
     id: 'group-core',
-    name: 'Group Chat',
+    name: 'Group Chat private',
     isGroup: true,
+    visibility: 'private',
     members: [
       me,
       { id: 'g1', name: 'Alex', color: 'orange' },
@@ -118,6 +120,25 @@ export const chats = ref<Chat[]>([
     unread: 0,
     lastStamp: 'Mon',
     lastPreview: 'Alex: let’s meet at 5!'
+  },
+  {
+    id: 'group-public',
+    name: 'Group Chat public',
+    isGroup: true,
+    visibility: 'public',
+    members: [
+      me,
+      { id: 'g11', name: 'Adam', color: 'orange' },
+      { id: 'g12', name: 'Eve', color: 'purple' }
+    ],
+    messages: [
+      { id: 'm1', authorId: 'g11', text: 'this a public group right', createdAt: '2025-03-30T12:00:00Z' },
+      { id: 'm1', authorId: 'g12', text: 'yeauuup', createdAt: '2025-03-30T12:00:00Z' },
+      { id: 'm1', authorId: 'g11', text: 'invite everyone', createdAt: '2025-03-30T12:00:00Z' }
+    ],
+    unread: 0,
+    lastStamp: 'Mon',
+    lastPreview: 'Adam: this a public group right'
   }
 ])
 
