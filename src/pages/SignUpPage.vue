@@ -45,6 +45,14 @@
 					outlined
 				/>
 				<q-input
+					v-model="nickname"
+					type="text"
+					label="Nickname"
+					autocomplete="nickname"
+					dense
+					outlined
+				/>
+				<q-input
 					v-model="email"
 					type="email"
 					label="E-mail"
@@ -91,17 +99,25 @@ const error = ref('')
 const first_name = ref('')
 const last_name = ref('')
 const auth = useAuthStore()
+const nickname = ref('')
 
-function onSubmit() {
-	//call store bu keep navigation here
+async function onSubmit() {
 	loading.value = true
 	error.value = ''
+
 	try {
 		const fullName = `${first_name.value} ${last_name.value}`.trim()
-		auth.signup(fullName, email.value, password.value)
-		void router.push('/chats')
+
+		const ok = await auth.signup(fullName, nickname.value, email.value, password.value)
+
+		if (ok) {
+			await router.push('/chats')
+		} else {
+			error.value = 'Signup failed. Please check your info.'
+		}
 	} finally {
 		loading.value = false
 	}
 }
+
 </script>

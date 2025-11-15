@@ -79,13 +79,18 @@ const loading = ref(false)
 const error = ref('')
 const auth = useAuthStore()
 
-function onSubmit() {
-  //call store but keep navigation here
-  loading.value = true
-  error.value = ''
-  try {
-		auth.login(email.value, password.value)
-		void router.push('/chats')
+async function onSubmit() {
+	loading.value = true
+	error.value = ''
+
+	try {
+		const ok = await auth.login(email.value, password.value)
+
+		if (ok) {
+			await router.push('/chats')
+		} else {
+			error.value = 'Invalid email or password.'
+		}
 	} finally {
 		loading.value = false
 	}

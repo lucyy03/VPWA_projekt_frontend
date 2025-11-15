@@ -112,7 +112,7 @@ function toggleLeftDrawer() {
 
 async function logout() {
   // call the store but keep router push here
-  auth.logout()
+  await auth.logout()
   await router.push('/login');
 }
 
