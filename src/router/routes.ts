@@ -27,6 +27,16 @@ const routes: RouteRecordRaw[] = [
     children: [{ path: '', component: () => import('pages/SettingsPage.vue') }],
   },
   {
+  path: '/chats_old',
+    component: () => import('layouts/MainLayout.vue'),
+    children: [{ path: '', component: () => import('pages/ChatsListPage_old.vue'), meta:{ cli:true } }],
+  },
+  {
+    path: '/chats_old/:id',
+    component: () => import('layouts/MainLayout.vue'),
+    children: [{ path: '', component: () => import('pages/ChatPage_old.vue') }],
+  },
+  {
   path: '/chats',
     component: () => import('layouts/MainLayout.vue'),
     children: [{ path: '', component: () => import('pages/ChatsListPage.vue'), meta:{ cli:true } }],

@@ -40,7 +40,7 @@
 import type { QInput } from 'quasar'
 import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { chats, me } from 'src/mock/chats'
+import { chats, me } from 'src/mock/chats_old'
 
 
 type Level = 'info'|'warn'|'error'

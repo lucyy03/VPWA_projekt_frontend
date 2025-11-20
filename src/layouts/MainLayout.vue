@@ -25,12 +25,18 @@
         </q-item>
         <q-separator spaced />
 
-
         <q-item clickable v-ripple to="/chats" exact>
           <q-item-section avatar>
             <q-icon name="home" />
           </q-item-section>
           <q-item-section>Chats</q-item-section>
+        </q-item>
+
+        <q-item clickable v-ripple to="/chats_old" exact>
+          <q-item-section avatar>
+            <q-icon name="home" />
+          </q-item-section>
+          <q-item-section>Chats old</q-item-section>
         </q-item>
 
         <q-item clickable v-ripple to="/profile">

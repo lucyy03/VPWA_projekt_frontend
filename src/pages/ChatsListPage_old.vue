@@ -46,7 +46,7 @@
 				:key="chat.id"
 				clickable
 				v-ripple
-				:to="`/chats/${chat.id}`"
+				:to="`/chats_old/${chat.id}`"
 				:style="isNew(chat) ? 'border-left:4px solid var(--q-primary);' : ''"
 			>
 				<q-item-section avatar>
@@ -85,23 +85,18 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
-import { useChatsStore } from 'src/stores/chats'
+/* no backend; list pulls from shared mock data */
+import { chats } from 'src/mock/chats_old'
+import { useChatsStore } from 'src/stores/chats_old'
 
 defineOptions({ name: 'ChatsPage' })
 
 const chatsStore = useChatsStore()
-
-onMounted(() => {
-	void chatsStore.fetchChats()
-})
-
-const chats = computed(() => chatsStore.chats)
 const { getPeerImg, getPeerLetter, getPeerColor, isNew } = chatsStore
 
 //helper for 3 dot menu
 function noop() {
-	//do nothing
+  // do nothing
 }
 
 </script>
