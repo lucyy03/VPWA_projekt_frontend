@@ -14,7 +14,7 @@
 			<q-btn flat round dense icon="more_vert" aria-label="More options">
 				<q-menu anchor="bottom right" self="top right" fit>
 					<q-list>
-						<q-item clickable v-close-popup @click="noop()">
+						<q-item clickable v-close-popup @click="openCreateChannel()">
 							<q-item-section avatar><q-icon name="add" /></q-item-section>
 							<q-item-section>Create new channel</q-item-section>
 						</q-item>
@@ -81,16 +81,22 @@
 				</q-item-section>
 			</q-item>
 		</q-list>
+		<CreateChannelDialog v-model="showCreateDialog" @created="onChannelCreated"/>
 	</q-page>
 </template>
 
 <script setup lang="ts">
-import { onMounted, computed } from 'vue'
+import { onMounted, computed, ref } from 'vue'
 import { useChatsStore } from 'src/stores/chats'
+import CreateChannelDialog from 'src/components/CreateChannelDialog.vue'
+import { useRouter } from 'vue-router'
+import type { Chat } from 'src/stores/chats'
 
 defineOptions({ name: 'ChatsPage' })
 
 const chatsStore = useChatsStore()
+const router = useRouter()
+const showCreateDialog = ref(false)
 
 onMounted(() => {
 	void chatsStore.fetchChats()
@@ -102,6 +108,18 @@ const { getPeerImg, getPeerLetter, getPeerColor, isNew } = chatsStore
 //helper for 3 dot menu
 function noop() {
 	//do nothing
+}
+
+function openCreateChannel() {
+	showCreateDialog.value = true
+}
+
+async function onChannelCreated(chat: Chat) {
+	try {
+		await router.push(`/chats/${chat.id}`)
+	} catch (err) {
+		console.error('navigate to new chat failed', err)
+	}
 }
 
 </script>

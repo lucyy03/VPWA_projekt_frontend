@@ -58,6 +58,15 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 	}
 
+	function upsertChat(chat: Chat) {
+		const idx = chats.value.findIndex(c => c.id === chat.id)
+		if (idx === -1) {
+			chats.value.push(chat)
+		} else {
+			chats.value[idx] = chat
+		}
+	}
+
 	async function fetchChats() {
         try {
             const res = await fetch(`${API_URL}/chats`, {
@@ -120,6 +129,82 @@ export const useChatsStore = defineStore('chats', () => {
 			console.error('[chatsStore] fetchMessages error', err)
 		}
 	}
+
+	async function createChat(payload: {
+		name: string
+		isGroup: boolean
+		visibility?: ChatVisibility
+		memberIds?: number[]
+		nicknames?: string | string[]
+	}): Promise<Chat | null> {
+		try {
+			const memberIds: number[] = payload.memberIds ? [...payload.memberIds] : []
+
+			const rawNicknames = payload.nicknames
+			if (rawNicknames) {
+				const list = Array.isArray(rawNicknames)
+					? rawNicknames
+					: rawNicknames.split(',').map(n => n.trim())
+
+				for (const nickname of list) {
+					if (!nickname) continue
+
+					const resUser = await fetch(
+						`${API_URL}/users/by-nickname/${encodeURIComponent(nickname)}`,
+						{
+							headers: {
+								'Content-Type': 'application/json',
+								...getAuthHeaders(),
+							},
+						},
+					)
+
+					if (resUser.status === 404) {
+						console.warn('[chatsStore] nickname not found:', nickname)
+						continue
+					}
+
+					if (!resUser.ok) {
+						console.error('[chatsStore] user lookup failed', nickname, resUser.status)
+						continue
+					}
+
+					const user: { id: number } = await resUser.json()
+					if (!memberIds.includes(user.id)) {
+						memberIds.push(user.id)
+					}
+				}
+			}
+
+			const res = await fetch(`${API_URL}/chats`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({
+					name: payload.name,
+					isGroup: payload.isGroup,
+					visibility: payload.visibility ?? 'private',
+					memberIds,
+				}),
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] createChat failed', res.status)
+				return null
+			}
+
+			const chat: Chat = await res.json()
+			chats.value.push(chat)
+			return chat
+		} catch (err) {
+			console.error('[chatsStore] createChat error', err)
+			return null
+		}
+	}
+
+
 
 	async function sendMessage(chatId: number, text: string): Promise<Message | null> {
 		try {
@@ -239,5 +324,7 @@ export const useChatsStore = defineStore('chats', () => {
 		fetchMessages,
 		sendMessage,
 		getMessages,
+		createChat,
+		upsertChat
 	}
 })
