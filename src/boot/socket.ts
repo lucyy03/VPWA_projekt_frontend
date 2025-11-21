@@ -1,4 +1,3 @@
-// src/boot/socket.ts
 import { defineBoot } from '#q-app/wrappers'
 import { io, type Socket } from 'socket.io-client'
 import { watch } from 'vue'
@@ -55,4 +54,35 @@ export default defineBoot(({ store }) => {
 		console.log('[ws] chat:created', chat)
 		chatsStore.upsertChat(chat)
 	})
+
+    // s.on('message:new', (payload: WsMessagePayload) => {
+    //     console.log('[ws] message:new received in boot', payload)
+
+    //     const chatId = Number(payload.chatId)
+    //     if (!Number.isFinite(chatId)) return
+
+    //     const msg: Message = {
+    //         id: payload.id,
+    //         authorId: payload.authorId,
+    //         text: payload.text,
+    //         createdAt: payload.createdAt,
+    //     }
+
+    //     const messagesByChat = chatsStore.messagesByChat
+
+    //     if (!messagesByChat[chatId]) {
+    //         messagesByChat[chatId] = []
+    //     }
+
+    //     const exists = messagesByChat[chatId].some(m => m.id === msg.id)
+    //     if (!exists) {
+    //         messagesByChat[chatId].push(msg)
+    //     }
+
+    //     const chat = chatsStore.chats.find(c => c.id === chatId)
+    //     if (chat) {
+    //         chat.lastPreview = msg.text
+    //         chat.lastStamp = msg.createdAt
+    //     }
+    // })
 })

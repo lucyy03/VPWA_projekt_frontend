@@ -1,10 +1,25 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
+import { getSocket } from 'boot/socket'
 
 const API_URL = import.meta.env.VITE_API_URL
 
 export type ChatVisibility = 'public' | 'private'
+
+export interface WsMessagePayload {
+	id: number
+	chatId: number
+	authorId: number
+	text: string
+	createdAt: string
+}
+
+export interface WsSendAck {
+	ok: boolean
+	error?: string
+	message?: WsMessagePayload
+}
 
 export interface Member {
 	id: number
@@ -46,10 +61,97 @@ function escapeRe(s: string) {
 
 export const useChatsStore = defineStore('chats', () => {
 	const chats = ref<Chat[]>([])
-	const messagesByChat = ref<Record<string, Message[]>>({})
+	const messagesByChat = ref<Record<number, Message[]>>({})
 
 	const authStore = useAuthStore()
 	const me = computed(() => authStore.user)
+
+	const joinedChats = ref<Set<number>>(new Set())
+
+	//track if ws listeners were attached
+	let wsReady = false
+
+	//get socket safely
+	function ensureSocket() {
+		const s = getSocket()
+		if (!s) {
+			console.warn('[chatsStore] socket not available yet')
+			return null
+		}
+		return s
+	}
+
+	//handle a single incoming message payload from ws
+	function handleIncomingMessage(payload: WsMessagePayload) {
+		console.log('[chatsStore] message:new received', payload)
+
+		const chatId = Number(payload.chatId)
+		if (!Number.isFinite(chatId)) return
+
+		const msg: Message = {
+			id: payload.id,
+			authorId: payload.authorId,
+			text: payload.text,
+			createdAt: payload.createdAt,
+		}
+
+		const current = messagesByChat.value[chatId] ?? []
+
+		const exists = current.some(m => m.id === msg.id)
+		if (!exists) {
+			//create a new array so watchers see a new reference so its reactive and so i dont waste an entire day trying to figure out this fuckass bullshit
+			messagesByChat.value[chatId] = [...current, msg]
+		}
+
+		const chat = chats.value.find(c => c.id === chatId)
+		if (chat) {
+			chat.lastPreview = msg.text
+			chat.lastStamp = msg.createdAt
+		}
+	}
+
+	//attach listeners only once
+	function setupSocketListeners() {
+		if (wsReady) return
+
+		const socket = ensureSocket()
+		if (!socket) return
+
+		socket.on('message:new', handleIncomingMessage)
+
+		wsReady = true
+		console.log('[chatsStore] websocket listeners attached')
+	}
+
+	//public initializer so boot file can force attaching listeners
+	function initWs() {
+		console.log('[chatsStore] initWs called')
+		setupSocketListeners()
+	}
+
+	function joinChatRoom(chatId: number) {
+		if (joinedChats.value.has(chatId)) return
+
+		const socket = ensureSocket()
+		if (!socket) return
+
+		//attach listeners when first joining any chat as a backup
+		setupSocketListeners()
+
+		if (!socket.connected) {
+			console.warn('[chatsStore] joinChatRoom: waiting for connection')
+			socket.once('connect', () => {
+				socket.emit('joinChannel', chatId)
+				joinedChats.value.add(chatId)
+				console.log('[chatsStore] joined chat after connect:', chatId)
+			})
+			return
+		}
+
+		socket.emit('joinChannel', chatId)
+		joinedChats.value.add(chatId)
+		console.log('[chatsStore] joined chat:', chatId)
+	}
 
 	function getAuthHeaders() {
 		if (!authStore.token) return {}
@@ -68,24 +170,23 @@ export const useChatsStore = defineStore('chats', () => {
 	}
 
 	async function fetchChats() {
-        try {
-            const res = await fetch(`${API_URL}/chats`, {
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...getAuthHeaders(),
-                },
-            })
-            if (!res.ok) {
-                console.error('[chatsStore] fetchChats failed', res.status)
-                return
-            }
-            const data: Chat[] = await res.json()
-            chats.value = data
-        } catch (err) {
-            console.error('[chatsStore] fetchChats error', err)
-        }
-    }
-
+		try {
+			const res = await fetch(`${API_URL}/chats`, {
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+			})
+			if (!res.ok) {
+				console.error('[chatsStore] fetchChats failed', res.status)
+				return
+			}
+			const data: Chat[] = await res.json()
+			chats.value = data
+		} catch (err) {
+			console.error('[chatsStore] fetchChats error', err)
+		}
+	}
 
 	async function fetchChat(chatId: number) {
 		try {
@@ -204,75 +305,46 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 	}
 
-
-
-	async function sendMessage(chatId: number, text: string): Promise<Message | null> {
-		try {
-			const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-					...getAuthHeaders(),
-				},
-				body: JSON.stringify({ text }),
-			})
-			if (!res.ok) {
-				console.error('[chatsStore] sendMessage failed', res.status)
-				return null
-			}
-			const msg: Message = await res.json()
-			if (!messagesByChat.value[chatId]) {
-				messagesByChat.value[chatId] = []
-			}
-			messagesByChat.value[chatId].push(msg)
-			return msg
-		} catch (err) {
-			console.error('[chatsStore] sendMessage error', err)
-			return null
-		}
-	}
-
 	function getMessages(chatId: number): Message[] {
 		return messagesByChat.value[chatId] ?? []
 	}
 
-    //helpers
+	//helpers
 	function nameOf(chatId: number, authorId: number) {
-        const c = chats.value.find(c => c.id === chatId)
-        const m = c?.members.find(n => n.id === authorId)
-        return m?.name || 'user'
-    }
+		const c = chats.value.find(c => c.id === chatId)
+		const m = c?.members.find(n => n.id === authorId)
+		return m?.name || 'user'
+	}
 
-    function avatarOf(chatId: number, authorId: number) {
-        const c = chats.value.find(c => c.id === chatId)
-        const m = c?.members.find(n => n.id === authorId)
-        if (!m || !me.value) return undefined
-        if (m.id === me.value.id) return undefined
-        if (m.avatar) return m.avatar
-        return undefined
-    }
+	function avatarOf(chatId: number, authorId: number) {
+		const c = chats.value.find(c => c.id === chatId)
+		const m = c?.members.find(n => n.id === authorId)
+		if (!m || !me.value) return undefined
+		if (m.id === me.value.id) return undefined
+		if (m.avatar) return m.avatar
+		return undefined
+	}
 
-    function isMention(chatId: number, m: Message): boolean {
-        const c = chats.value.find(c => c.id === chatId)
-        if (!c || !me.value) return false
-        if (m.authorId === me.value.id) return false
-        const handle = '@' + me.value.fullName
-        const re = new RegExp(`(^|\\s)${escapeRe(handle)}(\\b|\\s|$)`, 'i')
-        return re.test(m.text)
-    }
+	function isMention(chatId: number, m: Message): boolean {
+		const c = chats.value.find(c => c.id === chatId)
+		if (!c || !me.value) return false
+		if (m.authorId === me.value.id) return false
+		const handle = '@' + me.value.fullName
+		const re = new RegExp(`(^|\\s)${escapeRe(handle)}(\\b|\\s|$)`, 'i')
+		return re.test(m.text)
+	}
 
 	function isNew(chat: Chat | number): boolean {
-        const id = typeof chat === 'number' ? chat : chat.id
-        return !!chats.value.find(c => c.id === id && c.unread && c.unread > 0)
-    }
+		const id = typeof chat === 'number' ? chat : chat.id
+		return !!chats.value.find(c => c.id === id && c.unread && c.unread > 0)
+	}
 
 	function getPeer(chat: Chat): Member | undefined {
-        const currentUser = me.value
-        if (!currentUser) return undefined
-        if (chat.isGroup) return undefined
-        return chat.members.find(m => m.id !== currentUser.id)
-    }
-
+		const currentUser = me.value
+		if (!currentUser) return undefined
+		if (chat.isGroup) return undefined
+		return chat.members.find(m => m.id !== currentUser.id)
+	}
 
 	function getPeerImg(chat: Chat): string | undefined {
 		return getPeer(chat)?.avatar ?? undefined
@@ -303,6 +375,47 @@ export const useChatsStore = defineStore('chats', () => {
 		console.log('[chatsStore] banMember called for chat:', chatId)
 	}
 
+	async function sendMessageWs(chatId: number, text: string) {
+		const user = authStore.user
+		if (!user) return null
+
+		const socket = ensureSocket()
+		if (!socket || !socket.connected) {
+			console.error('[chatsStore] sendMessageWs: socket not connected')
+			return null
+		}
+
+		//make sure listeners exist before sending
+		setupSocketListeners()
+
+		return await new Promise<Message | null>((resolve) => {
+			socket.emit(
+				'message:send',
+				{
+					chatId,
+					text: text,
+					authorId: user.id,
+				},
+				(response: WsSendAck) => {
+					if (!response || !response.ok) {
+						console.error('[chatsStore] sendMessageWs failed', response?.error)
+						resolve(null)
+						return
+					}
+					const p = response.message as WsMessagePayload
+					const msg: Message = {
+						id: p.id,
+						authorId: p.authorId,
+						text: p.text,
+						createdAt: p.createdAt,
+					}
+					//message:new listener will also handle it, but we can resolve here for caller
+					resolve(msg)
+				},
+			)
+		})
+	}
+
 	return {
 		chats,
 		messagesByChat,
@@ -322,9 +435,11 @@ export const useChatsStore = defineStore('chats', () => {
 		fetchChats,
 		fetchChat,
 		fetchMessages,
-		sendMessage,
 		getMessages,
 		createChat,
-		upsertChat
+		upsertChat,
+		sendMessageWs,
+		joinChatRoom,
+		initWs,
 	}
 })

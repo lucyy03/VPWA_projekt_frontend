@@ -241,6 +241,8 @@ onBeforeUnmount(() => {
 	ro = null
 })
 
+const currentChatId = computed(() => Number(route.params.id))
+
 //look up the chat reactively based on :id
 const chat = computed(() => {
 	const id = Number(route.params.id)
@@ -274,12 +276,9 @@ async function send() {
 	const text = draft.value.trim()
 	if (!c || !text) return
 
-	const msg = await chatsStore.sendMessage(c.id, text)
-	if (msg) {
-		void appendMessage(msg, { force: true })
-	}
+	await chatsStore.sendMessageWs(c.id, text)
+
 	draft.value = ''
-	//no simulated remote reply here; real messages only
 }
 
 //typing simulation state kept so ui looks same but never toggled
@@ -329,16 +328,25 @@ const inf = ref<InstanceType<typeof QInfiniteScroll> | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
 let isLoading = false
 
-//init/refresh when chat changes
+const allMessages = computed<Message[]>(() => {
+	const c = chat.value
+	return c ? chatsStore.getMessages(c.id) : []
+})
+
+const initialMessagesLoaded = ref(false)
+
 watch(
-	() => route.params.id,
-	async () => {
-		const c = chat.value
-		if (!c) { visible.value = []; return }
-		const id = c.id
+	currentChatId,
+	async (id) => {
+		initialMessagesLoaded.value = false
+		visible.value = []
+		firstIndex.value = 0
+
+		if (!Number.isFinite(id)) return
 
 		await chatsStore.fetchChat(id)
 		await chatsStore.fetchMessages(id)
+		chatsStore.joinChatRoom(id)
 
 		const all = chatsStore.getMessages(id)
 		const total = all.length
@@ -350,8 +358,28 @@ watch(
 
 		inf.value?.reset()
 		inf.value?.resume()
+
+		initialMessagesLoaded.value = true
 	},
-	{ immediate: true }
+	{ immediate: true },
+)
+
+watch(
+	allMessages,
+	async (newVal, oldVal) => {
+		const c = chat.value
+		if (!c) return
+		if (!initialMessagesLoaded.value) return
+
+		const oldLen = oldVal ? oldVal.length : 0
+		if (newVal.length <= oldLen) return
+
+		const added = newVal.slice(oldLen)
+		for (const m of added) {
+			await appendMessage(m)
+		}
+	},
+	{ deep: true },
 )
 
 //load older when reaching the top
