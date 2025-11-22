@@ -235,8 +235,6 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
 	document.body.classList.remove('no-scroll')
-	if (typingTimer) clearTimeout(typingTimer)
-	if (typingInterval) clearInterval(typingInterval)
 	if (ro && composerEl.value) ro.unobserve(composerEl.value)
 	ro = null
 })
@@ -250,6 +248,12 @@ const chat = computed(() => {
 })
 
 const draft = ref('')
+
+watch(draft, (val) => {
+	const c = chat.value
+	if (!c) return
+	chatsStore.sendTyping(c.id, val)
+})
 
 //header avatar logic uses peer from store
 const peer = computed<Member | undefined>(() => (chat.value ? chatsStore.getPeer(chat.value) : undefined))
@@ -281,14 +285,24 @@ async function send() {
 	draft.value = ''
 }
 
-//typing simulation state kept so ui looks same but never toggled
-const remoteTyping = ref(false)
-const remoteDraft = ref('')
 const showTypingPreview = ref(false)
-const typingTimer: ReturnType<typeof setTimeout> | null = null
-const typingInterval: ReturnType<typeof setInterval> | null = null
 
-const peerName = computed(() => peer.value?.name ?? 'Someone')
+const typingInfo = computed(() => {
+	const c = chat.value
+	if (!c) return null
+	return chatsStore.getTyping(c.id)
+})
+
+const remoteTyping = computed(() => !!typingInfo.value && typingInfo.value.isTyping)
+const remoteDraft = computed(() => typingInfo.value?.draft ?? '')
+
+const peerName = computed(() => {
+	const c = chat.value
+	const info = typingInfo.value
+	if (!c || !info) return peer.value?.name ?? 'Someone'
+	const member = c.members.find(m => m.id === info.userId)
+	return member?.name ?? peer.value?.name ?? 'Someone'
+})
 
 async function toggleTypingPreview() {
 	showTypingPreview.value = !showTypingPreview.value

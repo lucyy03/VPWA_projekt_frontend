@@ -47,6 +47,14 @@ export interface Chat {
 	unread?: number
 }
 
+export interface TypingState {
+	chatId: number
+	userId: number
+	draft: string
+	isTyping: boolean
+	updatedAt: number
+}
+
 function fmt(iso: string) {
 	try {
 		return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -62,6 +70,7 @@ function escapeRe(s: string) {
 export const useChatsStore = defineStore('chats', () => {
 	const chats = ref<Chat[]>([])
 	const messagesByChat = ref<Record<number, Message[]>>({})
+	const typingByChat = ref<Record<number, TypingState | null>>({})
 
 	const authStore = useAuthStore()
 	const me = computed(() => authStore.user)
@@ -119,8 +128,59 @@ export const useChatsStore = defineStore('chats', () => {
 
 		socket.on('message:new', handleIncomingMessage)
 
+		socket.on('typing', (payload: { chatId: number; userId: number; draft: string; isTyping: boolean }) => {
+			console.log('[chatsStore] typing event', payload)
+
+			const user = me.value
+			if (!user) return
+
+			//ignore our own typing echoed back
+			if (payload.userId === user.id) return
+
+			const chatId = Number(payload.chatId)
+			if (!Number.isFinite(chatId)) return
+
+			if (!payload.isTyping) {
+				//stop typing
+				delete typingByChat.value[chatId]
+				return
+			}
+
+			typingByChat.value[chatId] = {
+				chatId,
+				userId: payload.userId,
+				draft: payload.draft ?? '',
+				isTyping: true,
+				updatedAt: Date.now(),
+			}
+		})
+
 		wsReady = true
 		console.log('[chatsStore] websocket listeners attached')
+	}
+
+	function sendTyping(chatId: number, draft: string) {
+		const user = authStore.user
+		if (!user) return
+
+		const socket = ensureSocket()
+		if (!socket || !socket.connected) return
+
+		//attach listeners just in case
+		setupSocketListeners()
+
+		const isTyping = draft.trim().length > 0
+
+		socket.emit('typing', {
+			chatId,
+			userId: user.id,
+			draft,
+			isTyping,
+		})
+	}
+
+	function getTyping(chatId: number): TypingState | null {
+		return typingByChat.value[chatId] ?? null
 	}
 
 	//public initializer so boot file can force attaching listeners
@@ -182,7 +242,13 @@ export const useChatsStore = defineStore('chats', () => {
 				return
 			}
 			const data: Chat[] = await res.json()
+			console.log('[chatsStore] fetchChats data:', data)
 			chats.value = data
+
+			// join all chat rooms so we get message:new for every chat
+			for (const chat of data) {
+				joinChatRoom(chat.id)
+			}
 		} catch (err) {
 			console.error('[chatsStore] fetchChats error', err)
 		}
@@ -226,6 +292,16 @@ export const useChatsStore = defineStore('chats', () => {
 			}
 			const data: Message[] = await res.json()
 			messagesByChat.value[chatId] = data
+
+			//update preview + timestamp based on last message
+			const last = data[data.length - 1]
+			if (last) {
+				const chat = chats.value.find(c => c.id === chatId)
+				if (chat) {
+					chat.lastPreview = last.text
+					chat.lastStamp = last.createdAt
+				}
+			}
 		} catch (err) {
 			console.error('[chatsStore] fetchMessages error', err)
 		}
@@ -441,5 +517,7 @@ export const useChatsStore = defineStore('chats', () => {
 		sendMessageWs,
 		joinChatRoom,
 		initWs,
+		getTyping,
+		sendTyping
 	}
 })
