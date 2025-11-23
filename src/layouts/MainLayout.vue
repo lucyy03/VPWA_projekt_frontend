@@ -100,15 +100,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import CliOverlay from 'src/components/CliOverlay.vue'
-import { useQuasar } from 'quasar'
 import { useAuthStore } from 'src/stores/auth'
 
 const router = useRouter();
 const leftDrawerOpen = ref(false);
-const $q = useQuasar()
 const auth = useAuthStore()
 
 // ui only
@@ -155,17 +153,5 @@ const statusColor = computed(() => {
   }
 });
 
-// show one-time notification on page open
-onMounted(() => {
-  $q.notify({
-    message: 'You have 1 new message',
-    caption: 'from @lucy',
-    icon: 'chat',
-    color: 'primary',
-    position: 'bottom-right',
-    timeout: 10000, // auto-dismiss
-    actions: [{ label: 'Open', color: 'white' }]
-  })
-})
 
 </script>

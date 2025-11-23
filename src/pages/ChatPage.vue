@@ -557,6 +557,35 @@ async function handleChatCommand(raw: string): Promise<boolean> {
 			return true
 		}
 
+		case 'list': {
+			const c = chat.value
+
+			if (!c || !c.isGroup) {
+				showCommandWarning('/list can only be used in group channels')
+				return true
+			}
+
+			const members = c.members || []
+			if (!members.length) {
+				showCommandWarning(`channel "${c.name}" has no members`)
+				return true
+			}
+
+			const admin = members.find(m => m.id === c.adminId)
+			const others = members.filter(m => m.id !== c.adminId)
+
+			const adminLine = admin ? `admin: ${admin.name}` : 'admin: unknown'
+			const othersLine = others.length
+				? `members (${others.length}): ${others.map(m => m.name).join(', ')}`
+				: 'members: (none)'
+
+			const header = `channel "${c.name}" members [${members.length}]`
+			const message = `${header}\n${adminLine}\n${othersLine}`
+
+			showCommandWarning(message)
+			return true
+		}
+
 		default:
 			//unknown /command → send as normal chat message
 			return false

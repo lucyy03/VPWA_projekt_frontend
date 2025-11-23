@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
 import { getSocket } from 'boot/socket'
+import { useQuasar } from 'quasar'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -56,6 +57,34 @@ export interface TypingState {
 	updatedAt: number
 }
 
+export type WsNotificationPayload =
+	| {
+			type: 'channel-invite'
+			chatId: number
+			chatName: string
+			fromUserId: number
+			fromNickname: string
+	  }
+	| {
+			type: 'message'
+			chatId: number
+			chatName: string
+			msgId: number
+			fromUserId: number
+			fromNickname: string
+			preview: string
+	  }
+	| {
+			type: 'mention'
+			chatId: number
+			chatName: string
+			msgId: number
+			fromUserId: number
+			fromNickname: string
+			preview: string
+	  }
+
+
 function fmt(iso: string) {
 	try {
 		return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -75,6 +104,7 @@ export const useChatsStore = defineStore('chats', () => {
 
 	const authStore = useAuthStore()
 	const me = computed(() => authStore.user)
+	const $q = useQuasar()
 
 	const joinedChats = ref<Set<number>>(new Set())
 
@@ -127,6 +157,53 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 	}
 
+	function handleNotification(payload: WsNotificationPayload) {
+		console.log('[chatsStore] notification', payload)
+
+		if (payload.type === 'message') {
+			$q.notify({
+				icon: 'chat',
+				color: 'secondary',
+				position: 'bottom-right',
+				timeout: 5000,
+				message: `new message in #${payload.chatName}`,
+				caption: `from @${payload.fromNickname}: ${payload.preview}`,
+			})
+		}
+
+		if (payload.type === 'mention') {
+			$q.notify({
+				icon: 'alternate_email',
+				color: 'accent',
+				position: 'bottom-right',
+				timeout: 10000,
+				message: `mentioned by @${payload.fromNickname}`,
+				caption: payload.preview,
+			})
+		}
+
+		if (payload.type === 'channel-invite') {
+			$q.notify({
+				icon: 'group_add',
+				color: 'primary',
+				position: 'bottom-right',
+				timeout: 10000,
+				message: 'channel invite',
+				caption: `you were invited to #${payload.chatName} by @${payload.fromNickname}`,
+				actions: [
+					{
+						label: 'Open',
+						color: 'white',
+						handler: () => {
+							//todo: navigate to channel by id (use router in component)
+						},
+					},
+				],
+			})
+		}
+		
+	}
+
 	//attach listeners only once
 	function setupSocketListeners() {
 		if (wsReady) return
@@ -135,6 +212,7 @@ export const useChatsStore = defineStore('chats', () => {
 		if (!socket) return
 
 		socket.on('message:new', handleIncomingMessage)
+		socket.on('notification', handleNotification)
 
 		socket.on('typing', (payload: { chatId: number; userId: number; draft: string; isTyping: boolean }) => {
 			console.log('[chatsStore] typing event', payload)
@@ -499,7 +577,17 @@ export const useChatsStore = defineStore('chats', () => {
 		const c = chats.value.find(c => c.id === chatId)
 		if (!c || !me.value) return false
 		if (m.authorId === me.value.id) return false
-		const handle = '@' + me.value.fullName
+
+		const u = me.value
+
+		const nick =
+			u.nickname ??
+			u.fullName ??
+			u.email
+
+		if (!nick) return false
+
+		const handle = '@' + nick
 		const re = new RegExp(`(^|\\s)${escapeRe(handle)}(\\b|\\s|$)`, 'i')
 		return re.test(m.text)
 	}
