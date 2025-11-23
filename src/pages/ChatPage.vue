@@ -76,9 +76,9 @@
             ref="inf"
             :offset="40"
             :debounce="120"
-            :disable="isLoading"
             reverse
-            :scroll-target="scrollEl || undefined"
+            scroll-target=".chat-scroll"
+			:immediate-check="false"
             @load="loadMore"
           >
             <div class="q-pa-md">
@@ -221,8 +221,8 @@ onMounted(async () => {
 	if (composerEl.value) ro.observe(composerEl.value)
 
 	//initial fetch for chat + messages
-	const id = Number(route.params.id)
-	await chatsStore.fetchChat(id)
+	// const id = Number(route.params.id)
+	// await chatsStore.fetchChat(id)
 
   const c = chat.value
 	if (c && c.invitationStatus === 'pending') {
@@ -231,7 +231,7 @@ onMounted(async () => {
 		return
 	}
 
-	await chatsStore.fetchMessages(id)
+	// await chatsStore.fetchMessages(id)
 
 	//update on typing preview toggles as well
 	watch(
@@ -638,7 +638,7 @@ const visible = ref<Message[]>([])
 const firstIndex = ref(0)
 const inf = ref<InstanceType<typeof QInfiniteScroll> | null>(null)
 const scrollEl = ref<HTMLElement | null>(null)
-let isLoading = false
+const isLoading = ref(false)
 
 const allMessages = computed<Message[]>(() => {
 	const c = chat.value
@@ -668,8 +668,8 @@ watch(
 		await nextTick()
 		if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight
 
-		inf.value?.reset()
-		inf.value?.resume()
+		// inf.value?.reset()
+		// inf.value?.resume()
 
 		initialMessagesLoaded.value = true
 	},
@@ -696,11 +696,16 @@ watch(
 
 //load older when reaching the top
 async function loadMore(_index: number, done: () => void) {
-	if (isLoading) { done(); return }
-	isLoading = true
+	if (!initialMessagesLoaded.value) {
+		done()
+		return
+	}
+
+	if (isLoading.value) { done(); return }
+	isLoading.value = true
 	try {
 		const c = chat.value
-		if (!c) return
+		if (!c) { done(); return }
 
 		const el = scrollEl.value
 		const oldBottom = el ? (el.scrollHeight - el.scrollTop) : 0
@@ -730,7 +735,7 @@ async function loadMore(_index: number, done: () => void) {
 
 		inf.value?.stop()
 	} finally {
-		isLoading = false
+		isLoading.value = false
 		done()
 	}
 }
