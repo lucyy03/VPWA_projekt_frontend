@@ -38,10 +38,18 @@
 <script setup lang="ts">
 /*minimal, focused overlay; uses a local key listener and simple in-memory history*/
 import type { QInput } from 'quasar'
-import { ref, onMounted, onBeforeUnmount, nextTick } from 'vue'
+import { ref, onMounted, onBeforeUnmount, nextTick, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { chats, me } from 'src/mock/chats_old'
+import { useChatsStore, type ChatVisibility } from 'src/stores/chats'
+import { useAuthStore } from 'src/stores/auth'
 
+const chatsStore = useChatsStore()
+const authStore = useAuthStore()
+
+const chats = computed(() => chatsStore.chats)
+const me = computed(() => authStore.user)
+const route = useRoute()
+const router = useRouter()
 
 type Level = 'info'|'warn'|'error'
 type Entry = { id:string; text:string; ts:string; level?:Level }
@@ -107,10 +115,7 @@ async function exec() {
   const raw = input.value.trim()
   input.value = ''
   if (!raw) return
-  pushIn(raw)
-
-  const route = useRoute()
-  const router = useRouter()
+  pushIn(raw)  
 
   if (!raw.startsWith('/')) { push('tip: commands start with "/" (try /help)'); return }
 
@@ -123,14 +128,20 @@ async function exec() {
 
   switch (cmd.toLowerCase()) {
     case 'help':
-      push(['available commands:',
-        '/help               show this help',
-        '/list               list chat members (if on chat)',
-        '/goto chats         go to chats list',
-        '/goto chat <id>     open chat by id',
-        '/clear              clear console'
-      ].join('\n'))
-      break
+			push([
+				'available commands:',
+				'/help                     show this help',
+				'/join name [private]      create or open a channel',
+				'/invite nickName          invite user into current channel',
+				'/revoke nickName          remove user from current channel (admin only)',
+				'/votekick nickName        vote to kick a member (public groups, non-admin)',
+				'/quit                     delete the current group channel (admin only)',
+				'/list                     list chat members (if on chat)',
+				'/goto chats               go to chats list',
+				'/goto chat <id>           open chat by id',
+				'/clear                    clear console',
+			].join('\n'))
+			break
     case 'clear':
       history.value = []
       break
@@ -142,14 +153,202 @@ async function exec() {
       break
     }
     case 'list': {
-      const c = route.params.id ? chats.value.find(x=>x.id===String(route.params.id)) : undefined
+      const c = route.params.id ? chats.value.find(x=>x.id===Number(route.params.id)) : undefined
       if (!c) { push('not on a chat page', 'warn'); break }
-      const names = c.members.map(mm=> mm.id===me.id ? 'You' : mm.name).join(', ')
+      const names = c.members.map(mm=> mm.id===me.value?.id ? 'You' : mm.name).join(', ')
       const out = `members: ${names}`
       push(out)
-      emitToChat(c.id, out)
+      emitToChat(String(c.id), out)
       break
     }
+    case 'join': {
+      const chanName = args[0]
+      const flag = (args[1] || '').toLowerCase()
+      const visibility: ChatVisibility = flag === 'private' ? 'private' : 'public'
+
+      if (!chanName) {
+        push('usage: /join channelName [private]', 'warn')
+        break
+      }
+
+      if (!me.value) {
+        push('not logged in', 'error')
+        break
+      }
+
+      try {
+        const chat = await chatsStore.joinOrCreateByName(chanName, visibility)
+        if (!chat) {
+          push('join failed', 'error')
+          break
+        }
+
+        await router.push(`/chats/${chat.id}`)
+        push(`opened ${chat.visibility} channel "${chat.name}" (id=${chat.id})`)
+      } catch (err) {
+        console.error('[cli] /join error', err)
+        push('join failed, see console', 'error')
+      }
+
+      break
+    }
+
+    case 'invite': {
+			const nickname = args[0]
+			if (!nickname) {
+				push('usage: /invite nickName', 'warn')
+				break
+			}
+
+			if (!me.value) {
+				push('not logged in', 'error')
+				break
+			}
+
+			const rawId = route.params.id
+			const chatId = rawId ? Number(rawId) : NaN
+			if (!Number.isFinite(chatId)) {
+				push('you must be on a chat page to use /invite', 'warn')
+				break
+			}
+
+			const c = chats.value.find(c => c.id === chatId)
+			if (!c || !c.isGroup) {
+				push('invite works only in group chats', 'warn')
+				break
+			}
+
+			const myId = me.value.id
+			const isAdmin = c.adminId === myId
+			const isMember = c.members.some(m => m.id === myId)
+
+			if (c.visibility === 'private' && !isAdmin) {
+				push('only channel admin can invite in private channels', 'warn')
+				break
+			}
+			if (c.visibility === 'public' && !isAdmin && !isMember) {
+				push('only channel members can invite in public channels', 'warn')
+				break
+			}
+
+			try {
+				const addedCount = await chatsStore.addMembersByNickname(c.id, nickname)
+				if (addedCount === 0) {
+					push(`user "${nickname}" not found, already in channel or banned`, 'warn')
+				} else {
+					push(`invited "${nickname}" to channel "${c.name}"`)
+				}
+			} catch (err) {
+				console.error('[cli] /invite error', err)
+				push('invite failed, see console', 'error')
+			}
+			break
+		}
+    case 'revoke': {
+			const nickname = args[0]
+			if (!nickname) {
+				push('usage: /revoke nickName', 'warn')
+				break
+			}
+
+			if (!me.value) {
+				push('not logged in', 'error')
+				break
+			}
+
+			const rawId = route.params.id
+			const chatId = rawId ? Number(rawId) : NaN
+			if (!Number.isFinite(chatId)) {
+				push('you must be on a chat page to use /revoke', 'warn')
+				break
+			}
+
+			const c = chats.value.find(c => c.id === chatId)
+			if (!c || !c.isGroup) {
+				push('revoke works only in group chats', 'warn')
+				break
+			}
+
+			const myId = me.value.id
+			if (c.adminId !== myId) {
+				push('only channel admin can revoke members', 'warn')
+				break
+			}
+
+			const member =
+				c.members.find(m => m.name === nickname) ||
+				c.members.find(m => m.name.toLowerCase() === nickname.toLowerCase())
+
+			if (!member) {
+				push(`member "${nickname}" not found in this channel`, 'warn')
+				break
+			}
+
+			try {
+				await chatsStore.kickMember(c.id, member.id)
+				push(`revoked "${member.name}" from channel "${c.name}"`)
+			} catch (err) {
+				console.error('[cli] /revoke error', err)
+				push('revoke failed, see console', 'error')
+			}
+			break
+		}
+    case 'votekick': {
+			const nickname = args[0]
+			if (!nickname) {
+				push('usage: /votekick nickName', 'warn')
+				break
+			}
+
+			if (!me.value) {
+				push('not logged in', 'error')
+				break
+			}
+
+			const rawId = route.params.id
+			const chatId = rawId ? Number(rawId) : NaN
+			if (!Number.isFinite(chatId)) {
+				push('you must be on a chat page to use /votekick', 'warn')
+				break
+			}
+
+			const c = chats.value.find(c => c.id === chatId)
+			if (!c || !c.isGroup || c.visibility !== 'public') {
+				push('/votekick can only be used in public group channels', 'warn')
+				break
+			}
+
+			const myId = me.value.id
+
+			//match UI: only non-admin members can votekick
+			if (c.adminId === myId) {
+				push('admins should kick directly or use /revoke', 'warn')
+				break
+			}
+
+			const member =
+				c.members.find(m => m.name === nickname) ||
+				c.members.find(m => m.name.toLowerCase() === nickname.toLowerCase())
+
+			if (!member) {
+				push(`/votekick: member "${nickname}" not found in this channel`, 'warn')
+				break
+			}
+			if (member.id === myId) {
+				push('you cannot votekick yourself', 'warn')
+				break
+			}
+
+			try {
+				await chatsStore.voteKick(c.id, member.id)
+				push(`vote kick cast against "${member.name}"`)
+			} catch (err) {
+				console.error('[cli] /votekick error', err)
+				push('votekick failed, see console', 'error')
+			}
+			break
+		}
+
     default:
       push(`unknown command: /${cmd} (try /help)`, 'warn')
   }

@@ -91,6 +91,13 @@ export const useChatsStore = defineStore('chats', () => {
 		return s
 	}
 
+	function clearTypingFor(chatId: number, userId: number) {
+		const ts = typingByChat.value[chatId]
+		if (ts && ts.userId === userId) {
+			delete typingByChat.value[chatId]
+		}
+	}
+
 	//handle a single incoming message payload from ws
 	function handleIncomingMessage(payload: WsMessagePayload) {
 		console.log('[chatsStore] message:new received', payload)
@@ -183,6 +190,7 @@ export const useChatsStore = defineStore('chats', () => {
 			const chat = chats.value.find(c => c.id === payload.chatId)
 			if (!chat) return
 			chat.members = chat.members.filter(m => m.id !== payload.userId)
+			clearTypingFor(payload.chatId, payload.userId)
 		})
 
 		socket.on('chat:left', (payload: { chatId: number, userId: number }) => {
@@ -192,7 +200,17 @@ export const useChatsStore = defineStore('chats', () => {
 			if (!chat) return
 
 			chat.members = chat.members.filter(m => m.id !== payload.userId)
+			clearTypingFor(payload.chatId, payload.userId)
 		})
+		socket.on('chat:memberBanned', (payload: { chatId: number; userId: number }) => {
+			console.log('[chatsStore] chat:memberBanned', payload)
+			const chat = chats.value.find(c => c.id === payload.chatId)
+			if (!chat) return
+
+			chat.members = chat.members.filter(m => m.id !== payload.userId)
+			clearTypingFor(payload.chatId, payload.userId)
+		})
+
 
 		wsReady = true
 		console.log('[chatsStore] websocket listeners attached')
@@ -423,6 +441,40 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 	}
 
+	async function joinOrCreateByName(
+		name: string,
+		visibility: ChatVisibility,
+	): Promise<Chat | null> {
+		try {
+			const res = await fetch(
+				`${API_URL}/chats/join`,
+				{
+					method: 'POST',
+					headers: {
+						'Content-Type': 'application/json',
+						...getAuthHeaders(),
+					},
+					body: JSON.stringify({ name, visibility }),
+				},
+			)
+
+			if (!res.ok) {
+				console.error('[chatsStore] joinOrCreateByName failed', res.status)
+				return null
+			}
+
+			const chat: Chat = await res.json()
+
+			//this ensures the chats array is updated reactively
+			upsertChat(chat)
+
+			return chat
+		} catch (err) {
+			console.error('[chatsStore] joinOrCreateByName error', err)
+			return null
+		}
+	}
+
 	function getMessages(chatId: number): Message[] {
 		return messagesByChat.value[chatId] ?? []
 	}
@@ -563,8 +615,33 @@ export const useChatsStore = defineStore('chats', () => {
 		return memberIds.length
 	}
 
-	function deleteChat(chatId: number): void {
-		console.log('[chatsStore] deleteChat requested for chat:', chatId)
+	async function deleteChat(chatId: number): Promise<void> {
+		console.log('[chatsStore] deleteChat', chatId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}`, {
+				method: 'DELETE',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] deleteChat failed', res.status)
+				return
+			}
+
+			//optimistically remove from local store
+			chats.value = chats.value.filter(c => c.id !== chatId)
+			delete messagesByChat.value[chatId]
+			delete typingByChat.value[chatId]
+			joinedChats.value.delete(chatId)
+
+			console.log('[chatsStore] deleteChat success', chatId)
+		} catch (err) {
+			console.error('[chatsStore] deleteChat error', err)
+		}
 	}
 
 	async function kickMember(chatId: number, userId: number): Promise<void> {
@@ -808,6 +885,7 @@ export const useChatsStore = defineStore('chats', () => {
 		acceptInvitation,
 		declineInvitation,
 		addMembersByNickname,
-		voteKick
+		voteKick,
+		joinOrCreateByName
 	}
 })

@@ -46,7 +46,7 @@
 
             <q-separator />
 
-            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="deleteChat(chat!.id)">
+            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="onDeleteChat">
               <q-item-section avatar><q-icon name="delete" /></q-item-section>
               <q-item-section class="text-negative">Delete chat</q-item-section>
             </q-item>
@@ -180,8 +180,8 @@
 <script setup lang="ts">
 import { ref, computed, onBeforeUnmount, watch, nextTick, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
-import { QChatMessage, QSpinnerDots, QInfiniteScroll } from 'quasar'
-import { useChatsStore, type Message, type Member } from 'src/stores/chats'
+import { QChatMessage, QSpinnerDots, QInfiniteScroll, useQuasar } from 'quasar'
+import { useChatsStore, type Message, type Member, type ChatVisibility } from 'src/stores/chats'
 import { useAuthStore } from 'src/stores/auth'
 import { useRouter } from 'vue-router'
 import MembersDialog from 'src/components/MembersDialog.vue'
@@ -195,6 +195,7 @@ defineOptions({ name: 'ChatPage' })
 const route = useRoute()
 const chatsStore = useChatsStore()
 const authStore = useAuthStore()
+const $q = useQuasar()
 
 const me = computed(() => authStore.user!)
 
@@ -285,10 +286,297 @@ function fmt(iso: string) {
 	return chatsStore.fmt(iso)
 }
 
+function showCommandWarning(text: string) {
+	$q.notify({
+		type: 'warning',
+		message: text,
+		timeout: 2500,
+		position: 'top',
+		icon: 'warning'
+	})
+}
+
+async function handleChatCommand(raw: string): Promise<boolean> {
+	const trimmed = raw.trim()
+	if (!trimmed.startsWith('/')) return false
+
+	const withoutSlash = trimmed.slice(1)
+	const parts = withoutSlash.split(/\s+/).filter(Boolean)
+	const cmd = (parts[0] || '').toLowerCase()
+	const args = parts.slice(1)
+
+	switch (cmd) {
+		case 'join': {
+			const chanName = args[0]
+			const flag = (args[1] || '').toLowerCase()
+			const visibility: ChatVisibility = flag === 'private' ? 'private' : 'public'
+
+			if (!chanName) {
+				showCommandWarning('/join usage: /join channelName private/public')
+				return true
+			}
+
+			try {
+				const joined = await chatsStore.joinOrCreateByName(chanName, visibility)
+				if (joined) {
+					await router.push(`/chats/${joined.id}`)
+				} else {
+					showCommandWarning('could not join or create this channel')
+				}
+			} catch (err) {
+				console.error('[chat] /join error', err)
+				showCommandWarning('join failed, see console')
+			}
+
+			return true
+		}
+		case 'invite': {
+			const c = chat.value
+			const nickname = args[0]
+
+			if (!c || !c.isGroup) {
+				showCommandWarning('/invite can only be used in group channels')
+				return true
+			}
+			if (!nickname) {
+				showCommandWarning('/invite usage: /invite nickName')
+				return true
+			}
+			if (!me.value) {
+				console.warn('[chat] /invite requires login')
+				return true
+			}
+
+			const myId = me.value.id
+			const isAdmin = c.adminId === myId
+			const isMember = c.members.some(m => m.id === myId)
+
+			if (c.visibility === 'private' && !isAdmin) {
+				showCommandWarning('Only the channel admin can invite users in private channels')
+				return true
+			}
+			if (c.visibility === 'public' && !isAdmin && !isMember) {
+				console.warn('[chat] only channel members can invite in public channels')
+				return true
+			}
+
+			try {
+				const addedCount = await chatsStore.addMembersByNickname(c.id, nickname)
+				if (addedCount === 0) {
+					console.warn('[chat] /invite: user not found, already in channel or banned')
+					showCommandWarning('user not found, may be banned')
+				}
+			} catch (err) {
+				console.error('[chat] /invite error', err)
+				showCommandWarning('error')
+			}
+
+			return true
+		}
+		case 'revoke': {
+			const c = chat.value
+			const nickname = args[0]
+
+			if (!c || !c.isGroup) {
+				showCommandWarning('/revok works only in group chats')
+				return true
+			}
+			if (!nickname) {
+				showCommandWarning('/revoke usage: /revoke nickName')
+				return true
+			}
+			if (!me.value) {
+				showCommandWarning('/revoke requires login')
+				return true
+			}
+
+			const myId = me.value.id
+			if (c.adminId !== myId) {
+				showCommandWarning('Only the channel admin can revoke users')
+				return true
+			}
+
+			const member =
+				c.members.find(m => m.name === nickname) ||
+				c.members.find(m => m.name.toLowerCase() === nickname.toLowerCase())
+
+			if (!member) {
+				console.warn('[chat] /revoke: member not found in this channel')
+				showCommandWarning('member not found')
+				return true
+			}
+
+			try {
+				await chatsStore.kickMember(c.id, member.id)
+			} catch (err) {
+				console.error('[chat] /revoke error', err)
+				showCommandWarning('error')
+			}
+
+			return true
+		}
+		case 'votekick': {
+			const c = chat.value
+			const nickname = args[0]
+
+			if (!c || !c.isGroup || c.visibility !== 'public') {
+				showCommandWarning('/votekick can only be used in public group channels')
+				return true
+			}
+			if (!nickname) {
+				showCommandWarning('usage: /votekick nickName')
+				return true
+			}
+			if (!me.value) {
+				showCommandWarning('/votekick requires login')
+				return true
+			}
+
+			const myId = me.value.id
+
+			//match UI: non-admin members only
+			if (c.adminId === myId) {
+				showCommandWarning('admins should kick directly using the UI or /revoke')
+				return true
+			}
+
+			const member =
+				c.members.find(m => m.name === nickname) ||
+				c.members.find(m => m.name.toLowerCase() === nickname.toLowerCase())
+
+			if (!member) {
+				showCommandWarning('/votekick: member not found in this channel')
+				return true
+			}
+			if (member.id === myId) {
+				showCommandWarning('you cannot votekick yourself')
+				return true
+			}
+
+			try {
+				await voteKick(c.id, member.id)
+				//optional success feedback
+				$q.notify({
+					type: 'positive',
+					message: `vote kick cast against "${member.name}"`,
+					timeout: 2000,
+					position: 'top',
+					icon: 'how_to_vote',
+				})
+			} catch (err) {
+				console.error('[chat] /votekick error', err)
+				showCommandWarning('votekick failed, see console')
+			}
+
+			return true
+		}
+		case 'quit': {
+			const c = chat.value
+
+			if (!c || !c.isGroup) {
+				showCommandWarning('/quit can only be used in group channels')
+				return true
+			}
+			if (!me.value) {
+				showCommandWarning('/quit requires login')
+				return true
+			}
+
+			const myId = me.value.id
+			if (c.adminId !== myId) {
+				showCommandWarning('Only the channel admin can use /quit')
+				return true
+			}
+
+			try {
+				await deleteChat(c.id)
+				await router.push('/chats')
+				$q.notify({
+					type: 'positive',
+					message: `channel "${c.name}" has been deleted`,
+					timeout: 2000,
+					position: 'top',
+					icon: 'delete'
+				})
+			} catch (err) {
+				console.error('[chat] /quit error', err)
+				showCommandWarning('failed to delete channel, see console')
+			}
+
+			return true
+		}
+		case 'cancel': {
+			const c = chat.value
+
+			if (!c || !c.isGroup) {
+				showCommandWarning('/cancel can only be used in group channels')
+				return true
+			}
+			if (!me.value) {
+				showCommandWarning('/cancel requires login')
+				return true
+			}
+
+			const myId = me.value.id
+
+			//admin -> behave like /quit
+			if (c.adminId === myId) {
+				try {
+					await deleteChat(c.id)
+					await router.push('/chats')
+					$q.notify({
+						type: 'positive',
+						message: `channel "${c.name}" has been deleted`,
+						timeout: 2000,
+						position: 'top',
+						icon: 'delete'
+					})
+				} catch (err) {
+					console.error('[chat] /cancel (admin) error', err)
+					showCommandWarning('failed to delete channel, see console')
+				}
+				return true
+			}
+
+			//non-admin -> behave like leave
+			try {
+				await leaveChat(c.id)
+				await router.push('/chats')
+				$q.notify({
+					type: 'info',
+					message: `you left channel "${c.name}"`,
+					timeout: 2000,
+					position: 'top',
+					icon: 'logout'
+				})
+			} catch (err) {
+				console.error('[chat] /cancel (member) error', err)
+				showCommandWarning('failed to leave channel, see console')
+			}
+
+			return true
+		}
+
+		default:
+			//unknown /command → send as normal chat message
+			return false
+	}
+}
+
+
 async function send() {
 	const c = chat.value
 	const text = draft.value.trim()
 	if (!c || !text) return
+
+	//handle local commands like /join before sending to server
+	if (text.startsWith('/')) {
+		const handled = await handleChatCommand(text)
+		if (handled) {
+			draft.value = ''
+			return
+		}
+	}
 
 	await chatsStore.sendMessageWs(c.id, text)
 
@@ -513,6 +801,13 @@ async function onVoteKickMember(member: Member): Promise<void> {
 	const c = chat.value
 	if (!c) return
 	await voteKick(c.id, member.id)
+}
+
+async function onDeleteChat(): Promise<void> {
+	if (!chat.value) return
+	const id = chat.value.id
+	void deleteChat(id)
+	await router.push('/chats')
 }
 
 //menu actions from store
