@@ -45,6 +45,7 @@ export interface Chat {
 	lastPreview?: string
 	lastStamp?: string
 	unread?: number
+	invitationStatus?: 'pending' | 'accepted' | 'declined'
 }
 
 export interface TypingState {
@@ -155,6 +156,44 @@ export const useChatsStore = defineStore('chats', () => {
 			}
 		})
 
+		socket.on('chat:removed', (payload: { chatId: number; reason?: string }) => {
+			console.log('[chatsStore] chat:removed', payload)
+
+			const id = payload.chatId
+			chats.value = chats.value.filter(c => c.id !== id)
+			delete messagesByChat.value[id]
+			delete typingByChat.value[id]
+			joinedChats.value.delete(id)
+		})
+
+		socket.on('chat:memberAccepted', (payload: { chatId: number; member: Member }) => {
+			console.log('[chatsStore] chat:memberAccepted', payload)
+
+			const chat = chats.value.find(c => c.id === payload.chatId)
+			if (!chat) return
+
+			const alreadyIn = chat.members.some(m => m.id === payload.member.id)
+			if (!alreadyIn) {
+				chat.members.push(payload.member)
+			}
+		})
+
+		socket.on('chat:memberKicked', (payload: { chatId: number; userId: number; by?: string }) => {
+			console.log('[chatsStore] chat:memberKicked', payload)
+			const chat = chats.value.find(c => c.id === payload.chatId)
+			if (!chat) return
+			chat.members = chat.members.filter(m => m.id !== payload.userId)
+		})
+
+		socket.on('chat:left', (payload: { chatId: number, userId: number }) => {
+			console.log('[chatsStore] chat:left', payload)
+
+			const chat = chats.value.find(c => c.id === payload.chatId)
+			if (!chat) return
+
+			chat.members = chat.members.filter(m => m.id !== payload.userId)
+		})
+
 		wsReady = true
 		console.log('[chatsStore] websocket listeners attached')
 	}
@@ -245,8 +284,11 @@ export const useChatsStore = defineStore('chats', () => {
 			console.log('[chatsStore] fetchChats data:', data)
 			chats.value = data
 
-			// join all chat rooms so we get message:new for every chat
+			//join only chats where invitation is not pending
 			for (const chat of data) {
+				if (chat.invitationStatus === 'pending') {
+					continue
+				}
 				joinChatRoom(chat.id)
 			}
 		} catch (err) {
@@ -412,7 +454,13 @@ export const useChatsStore = defineStore('chats', () => {
 
 	function isNew(chat: Chat | number): boolean {
 		const id = typeof chat === 'number' ? chat : chat.id
-		return !!chats.value.find(c => c.id === id && c.unread && c.unread > 0)
+		const c = chats.value.find(c => c.id === id)
+		if (!c) return false
+
+		//pending invitations are always highlighted as "new"
+		if (c.invitationStatus === 'pending') return true
+
+		return !!(c.unread && c.unread > 0)
 	}
 
 	function getPeer(chat: Chat): Member | undefined {
@@ -435,20 +483,144 @@ export const useChatsStore = defineStore('chats', () => {
 		return getPeer(chat)?.color ?? 'grey-6'
 	}
 
-	function addMember(chatId: number): void {
-		console.log('[chatsStore] addMember requested for chat:', chatId)
+	async function addMember(chatId: number, userIds: number[]): Promise<void> {
+		console.log('[chatsStore] addMember', chatId, userIds)
+
+		if (!userIds.length) return
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/members`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({ memberIds: userIds }),
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] addMember failed', res.status)
+				return
+			}
+
+			console.log('[chatsStore] addMember success')
+		} catch (err) {
+			console.error('[chatsStore] addMember error', err)
+		}
+	}
+	async function addMembersByNickname(
+		chatId: number,
+		rawNicknames: string | string[],
+	): Promise<number> {
+		const memberIds: number[] = []
+
+		const list = Array.isArray(rawNicknames)
+			? rawNicknames
+			: rawNicknames.split(',').map(n => n.trim())
+
+		for (const nickname of list) {
+			if (!nickname) continue
+
+			try {
+				const resUser = await fetch(
+					`${API_URL}/users/by-nickname/${encodeURIComponent(nickname)}`,
+					{
+						headers: {
+							'Content-Type': 'application/json',
+							...getAuthHeaders(),
+						},
+					},
+				)
+
+				if (resUser.status === 404) {
+					console.warn('[chatsStore] nickname not found when adding member:', nickname)
+					continue
+				}
+
+				if (!resUser.ok) {
+					console.error(
+						'[chatsStore] user lookup failed when adding member',
+						nickname,
+						resUser.status,
+					)
+					continue
+				}
+
+				const user: { id: number } = await resUser.json()
+				if (!memberIds.includes(user.id)) {
+					memberIds.push(user.id)
+				}
+			} catch (err) {
+				console.error('[chatsStore] addMembersByNickname lookup error', nickname, err)
+			}
+		}
+
+		if (memberIds.length === 0) {
+			return 0
+		}
+
+		await addMember(chatId, memberIds)
+		return memberIds.length
 	}
 
 	function deleteChat(chatId: number): void {
 		console.log('[chatsStore] deleteChat requested for chat:', chatId)
 	}
 
-	function kickMember(chatId: number): void {
-		console.log('[chatsStore] kickMember called for chat:', chatId)
+	async function kickMember(chatId: number, userId: number): Promise<void> {
+		console.log('[chatsStore] kickMember', chatId, userId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/kick`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({ userId }),
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] kickMember failed', res.status)
+				return
+			}
+
+			//update local members list
+			const chat = chats.value.find(c => c.id === chatId)
+			if (chat) {
+				chat.members = chat.members.filter(m => m.id !== userId)
+			}
+		} catch (err) {
+			console.error('[chatsStore] kickMember error', err)
+		}
 	}
 
-	function banMember(chatId: number): void {
-		console.log('[chatsStore] banMember called for chat:', chatId)
+	async function banMember(chatId: number, userId: number): Promise<void> {
+		console.log('[chatsStore] banMember', chatId, userId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/ban`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({ userId }),
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] banMember failed', res.status)
+				return
+			}
+
+			//update local members list
+			const chat = chats.value.find(c => c.id === chatId)
+			if (chat) {
+				chat.members = chat.members.filter(m => m.id !== userId)
+			}
+		} catch (err) {
+			console.error('[chatsStore] banMember error', err)
+		}
 	}
 
 	async function sendMessageWs(chatId: number, text: string) {
@@ -492,6 +664,119 @@ export const useChatsStore = defineStore('chats', () => {
 		})
 	}
 
+	async function leaveChat(chatId: number): Promise<void> {
+		console.log('[chatsStore] leaveChat requested for chat:', chatId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/leave`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] leaveChat failed', res.status)
+				return
+			}
+
+			//remove from local store
+			chats.value = chats.value.filter((c) => c.id !== chatId)
+			delete messagesByChat.value[chatId]
+			delete typingByChat.value[chatId]
+			joinedChats.value.delete(chatId)
+
+			console.log('[chatsStore] left chat:', chatId)
+		} catch (err) {
+			console.error('[chatsStore] leaveChat error', err)
+		}
+	}
+
+	async function acceptInvitation(chatId: number): Promise<Chat | null> {
+		console.log('[chatsStore] acceptInvitation', chatId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/accept`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] acceptInvitation failed', res.status)
+				return null
+			}
+
+			const chat: Chat = await res.json()
+			chat.invitationStatus = 'accepted'
+
+			//insert or update chat
+			const idx = chats.value.findIndex(c => c.id === chat.id)
+			if (idx === -1) {
+				chats.value.push(chat)
+			} else {
+				chats.value[idx] = chat
+			}
+
+			//now we can join the chat room
+			joinChatRoom(chat.id)
+
+			return chat
+		} catch (err) {
+			console.error('[chatsStore] acceptInvitation error', err)
+			return null
+		}
+	}
+
+	async function declineInvitation(chatId: number): Promise<void> {
+		console.log('[chatsStore] declineInvitation', chatId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/decline`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] declineInvitation failed', res.status)
+				return
+			}
+
+			//remove from local list
+			chats.value = chats.value.filter(c => c.id !== chatId)
+		} catch (err) {
+			console.error('[chatsStore] declineInvitation error', err)
+		}
+	}
+
+	async function voteKick(chatId: number, targetId: number): Promise<void> {
+		console.log('[chatsStore] voteKick', chatId, targetId)
+
+		try {
+			const res = await fetch(`${API_URL}/chats/${chatId}/vote-kick`, {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+					...getAuthHeaders(),
+				},
+				body: JSON.stringify({ targetId }),
+			})
+
+			if (!res.ok) {
+				console.error('[chatsStore] voteKick failed', res.status)
+				return
+			}
+		} catch (err) {
+			console.error('[chatsStore] voteKick error', err)
+		}
+	}
+
 	return {
 		chats,
 		messagesByChat,
@@ -518,6 +803,11 @@ export const useChatsStore = defineStore('chats', () => {
 		joinChatRoom,
 		initWs,
 		getTyping,
-		sendTyping
+		sendTyping,
+		leaveChat,
+		acceptInvitation,
+		declineInvitation,
+		addMembersByNickname,
+		voteKick
 	}
 })

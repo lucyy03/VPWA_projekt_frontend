@@ -28,28 +28,18 @@
         <q-menu anchor="bottom right" self="top right">
           <q-list style="min-width: 200px">
             <q-item
-              v-if="chat?.isGroup && (chat?.visibility === 'public' || chat?.adminId === me.id)" clickable v-close-popup @click="addMember(chat!.id)">
+              v-if="chat?.isGroup && (chat?.visibility === 'public' || chat?.adminId === me.id)" clickable v-close-popup @click="showAddMemberDialog = true">
               <q-item-section avatar><q-icon name="person_add" /></q-item-section>
               <q-item-section>Add member</q-item-section>
             </q-item>
-            <q-item clickable v-close-popup>
+            <q-item clickable v-close-popup @click="showMembersDialog = true">
               <q-item-section avatar><q-icon name="group" /></q-item-section>
               <q-item-section>Members</q-item-section>
-            </q-item>
-            <!-- admin kick and ban -->
-            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="kickMember(chat!.id)">
-              <q-item-section avatar><q-icon name="remove_circle" /></q-item-section>
-              <q-item-section>Kick member</q-item-section>
-            </q-item>
-
-            <q-item v-if="chat?.isGroup && chat?.adminId === me.id" clickable v-close-popup @click="banMember(chat!.id)">
-              <q-item-section avatar><q-icon name="block" /></q-item-section>
-              <q-item-section>Ban member</q-item-section>
             </q-item>
 
             <!-- non-admin group members vote kick -->
             <q-item
-              v-if="chat?.isGroup && chat?.adminId !== me.id" clickable v-close-popup @click="console.log('[ui] vote kick requested for', chat!.id)">
+              v-if="chat?.isGroup && chat?.visibility === 'public' && chat?.adminId !== me.id" clickable v-close-popup @click="showVoteKickDialog = true">
               <q-item-section avatar><q-icon name="how_to_vote" /></q-item-section>
               <q-item-section>Vote kick</q-item-section>
             </q-item>
@@ -61,7 +51,7 @@
               <q-item-section class="text-negative">Delete chat</q-item-section>
             </q-item>
 
-            <q-item v-else clickable v-close-popup>
+            <q-item v-else clickable v-close-popup @click="onLeaveChat(chat!.id)">
               <q-item-section avatar><q-icon name="logout" /></q-item-section>
               <q-item-section class="text-negative">Leave chat</q-item-section>
             </q-item>
@@ -164,6 +154,9 @@
         </div>
       </div>
     </template>
+    <MembersDialog v-if="chat" v-model="showMembersDialog" :members="chat.members" :admin-id="chat.adminId" :chat-id="chat.id" :can-moderate="chat.adminId === me.id" :me-id="me.id" @kick="onKickMember" @ban="onBanMember"/>
+    <AddMemberDialog v-if="chat" v-model="showAddMemberDialog" :chat-id="chat.id" />
+    <VoteKickDialog v-if="chat" v-model="showVoteKickDialog" :members="chat.members" :admin-id="chat.adminId" :me-id="me.id" @vote-kick="onVoteKickMember" />
   </q-page>
 </template>
 
@@ -190,6 +183,12 @@ import { useRoute } from 'vue-router'
 import { QChatMessage, QSpinnerDots, QInfiniteScroll } from 'quasar'
 import { useChatsStore, type Message, type Member } from 'src/stores/chats'
 import { useAuthStore } from 'src/stores/auth'
+import { useRouter } from 'vue-router'
+import MembersDialog from 'src/components/MembersDialog.vue'
+import AddMemberDialog from 'src/components/AddMemberDialog.vue'
+import VoteKickDialog from 'src/components/VoteKickDialog.vue'
+
+const router = useRouter()
 
 defineOptions({ name: 'ChatPage' })
 
@@ -202,6 +201,9 @@ const me = computed(() => authStore.user!)
 //types for private, local-only command output
 type EphemeralMsg = { id: string; text: string; createdAt: string }
 const ephemerals = ref<Record<string, EphemeralMsg[]>>({})
+const showMembersDialog = ref(false)
+const showAddMemberDialog = ref(false)
+const showVoteKickDialog = ref(false)
 
 const composerEl = ref<HTMLElement | null>(null)
 const composerH = ref(72)
@@ -220,6 +222,14 @@ onMounted(async () => {
 	//initial fetch for chat + messages
 	const id = Number(route.params.id)
 	await chatsStore.fetchChat(id)
+
+  const c = chat.value
+	if (c && c.invitationStatus === 'pending') {
+		//redirect back to list if user tries to open pending invite directly
+		await router.push('/chats')
+		return
+	}
+
 	await chatsStore.fetchMessages(id)
 
 	//update on typing preview toggles as well
@@ -482,6 +492,29 @@ const chipColor = computed(() => {
 	return chat.value?.visibility === 'public' ? 'positive' : 'grey-6'
 })
 
+async function onLeaveChat(chatId: number): Promise<void> {
+	await leaveChat(chatId)
+	await router.push('/chats')
+}
+
+async function onKickMember(member: Member): Promise<void> {
+	const c = chat.value
+	if (!c) return
+	await kickMember(c.id, member.id)
+}
+
+async function onBanMember(member: Member): Promise<void> {
+	const c = chat.value
+	if (!c) return
+	await banMember(c.id, member.id)
+}
+
+async function onVoteKickMember(member: Member): Promise<void> {
+	const c = chat.value
+	if (!c) return
+	await voteKick(c.id, member.id)
+}
+
 //menu actions from store
-const { addMember, deleteChat, kickMember, banMember } = chatsStore
+const { deleteChat, kickMember, banMember, leaveChat, voteKick } = chatsStore
 </script>

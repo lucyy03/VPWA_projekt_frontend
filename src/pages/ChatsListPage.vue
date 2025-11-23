@@ -19,10 +19,7 @@
 							<q-item-section>Create new channel</q-item-section>
 						</q-item>
 
-						<q-item clickable v-close-popup @click="noop()">
-							<q-item-section avatar><q-icon name="person_add" /></q-item-section>
-							<q-item-section>New direct message</q-item-section>
-						</q-item>
+						
 
 						<q-item clickable v-close-popup @click="noop()">
 							<q-item-section avatar><q-icon name="archive" /></q-item-section>
@@ -42,11 +39,11 @@
 
 		<q-list separator bordered>
 			<q-item
-				v-for="chat in chats"
+				v-for="chat in sortedChats"
 				:key="chat.id"
-				clickable
-				v-ripple
-				:to="`/chats/${chat.id}`"
+				:clickable="chat.invitationStatus !== 'pending'"
+				v-ripple="chat.invitationStatus !== 'pending'"
+				:to="chat.invitationStatus !== 'pending' ? `/chats/${chat.id}` : undefined"
 				:style="isNew(chat) ? 'border-left:4px solid var(--q-primary);' : ''"
 			>
 				<q-item-section avatar>
@@ -79,6 +76,14 @@
 					<q-badge v-if="isNew(chat)" color="primary" outline label="NEW" class="q-mt-xs" />
 					<q-badge v-if="chat.unread" color="red" :label="chat.unread" />
 				</q-item-section>
+
+				<!-- accept/decline buttons for pending invitations -->
+				<q-item-section side v-if="chat.invitationStatus === 'pending'">
+					<div class="row q-gutter-xs">
+						<q-btn size="sm" color="primary" label="Accept" @click.stop.prevent="onAccept(chat)" />
+						<q-btn size="sm" color="negative" outline label="Decline" @click.stop.prevent="onDecline(chat)" />
+					</div>
+				</q-item-section>
 			</q-item>
 		</q-list>
 		<CreateChannelDialog v-model="showCreateDialog" @created="onChannelCreated"/>
@@ -103,6 +108,17 @@ onMounted(() => {
 })
 
 const chats = computed(() => chatsStore.chats)
+//sorted version: pending invitations first
+const sortedChats = computed(() => {
+	return [...chats.value].sort((a, b) => {
+		const aPending = a.invitationStatus === 'pending'
+		const bPending = b.invitationStatus === 'pending'
+		if (aPending && !bPending) return -1
+		if (bPending && !aPending) return 1
+		//fallback: don’t change relative order
+		return 0
+	})
+})
 const { getPeerImg, getPeerLetter, getPeerColor, isNew } = chatsStore
 
 //helper for 3 dot menu
@@ -120,6 +136,16 @@ async function onChannelCreated(chat: Chat) {
 	} catch (err) {
 		console.error('navigate to new chat failed', err)
 	}
+}
+
+async function onAccept(chat: Chat): Promise<void> {
+	const accepted = await chatsStore.acceptInvitation(chat.id)
+	if (!accepted) return
+	await router.push(`/chats/${chat.id}`)
+}
+
+async function onDecline(chat: Chat): Promise<void> {
+	await chatsStore.declineInvitation(chat.id)
 }
 
 </script>
