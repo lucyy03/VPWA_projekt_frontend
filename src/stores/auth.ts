@@ -8,6 +8,12 @@ interface AuthUser {
 	fullName: string | null
 	nickname: string | null
 	email: string
+	firstname: string | null
+	lastname: string | null
+	status: string | null
+	bio: string | null
+	createdAt: string
+	avatarUrl: string | null
 }
 
 export const useAuthStore = defineStore('auth', () => {

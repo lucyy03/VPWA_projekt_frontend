@@ -17,10 +17,19 @@
         <q-item-label header>Menu</q-item-label>
 
         <q-item>
-          <q-item-section avatar><q-avatar icon="person" /></q-item-section>
+          <q-item-section avatar>
+            <q-avatar v-if="menuAvatarUrl" size="32px">
+              <img :src="menuAvatarUrl" alt="User avatar" />
+            </q-avatar>
+            <q-avatar v-else size="32px" color="primary" text-color="white">
+              {{ menuAvatarInitials }}
+            </q-avatar>
+          </q-item-section>
           <q-item-section>
-            <q-item-label>Lucy the Vychodnar</q-item-label>
-            <q-item-label caption class="text-white">@lucy</q-item-label>
+            <q-item-label>{{ menuDisplayName }}</q-item-label>
+            <q-item-label caption class="text-white">
+              {{ menuDisplayNickname }}
+            </q-item-label>
           </q-item-section>
         </q-item>
         <q-separator spaced />
@@ -32,12 +41,12 @@
           <q-item-section>Chats</q-item-section>
         </q-item>
 
-        <q-item clickable v-ripple to="/chats_old" exact>
+        <!-- <q-item clickable v-ripple to="/chats_old" exact>
           <q-item-section avatar>
             <q-icon name="home" />
           </q-item-section>
           <q-item-section>Chats old</q-item-section>
-        </q-item>
+        </q-item> -->
 
         <q-item clickable v-ripple to="/profile">
           <q-item-section avatar>
@@ -108,6 +117,65 @@ import { useAuthStore } from 'src/stores/auth'
 const router = useRouter();
 const leftDrawerOpen = ref(false);
 const auth = useAuthStore()
+
+const authUser = computed(() => auth.user)
+
+const menuAvatarUrl = computed(() => {
+	const user = authUser.value
+	return user?.avatarUrl ?? ''
+})
+
+const menuAvatarInitials = computed(() => {
+	const user = authUser.value
+	if (!user) return '?'
+
+	const chars: string[] = []
+
+	const first = user.firstname?.charAt(0)
+	if (first) chars.push(first)
+
+	const last = user.lastname?.charAt(0)
+	if (last) chars.push(last)
+
+	if (!chars.length && user.fullName) {
+		const parts = user.fullName.split(' ').filter(p => p && p.trim().length > 0)
+		const p0 = parts[0]?.charAt(0)
+		const p1 = parts[1]?.charAt(0)
+		if (p0) chars.push(p0)
+		if (p1) chars.push(p1)
+	}
+
+	const nick = user.nickname?.charAt(0)
+	if (!chars.length && nick) chars.push(nick)
+
+	const mail = user.email?.charAt(0)
+	if (!chars.length && mail) chars.push(mail)
+
+	return chars.join('').toUpperCase()
+})
+
+const menuDisplayName = computed(() => {
+	const user = authUser.value
+	if (!user) return 'Guest'
+
+	if (user.fullName && user.fullName.trim().length > 0) {
+		return user.fullName
+	}
+
+	const parts: string[] = []
+	if (user.firstname) parts.push(user.firstname)
+	if (user.lastname) parts.push(user.lastname)
+
+	if (parts.length) return parts.join(' ')
+
+	return 'Guest'
+})
+
+const menuDisplayNickname = computed(() => {
+	const user = authUser.value
+	if (!user || !user.nickname) return '@nickname'
+	return `@${user.nickname}`
+})
 
 // ui only
 function toggleLeftDrawer() {

@@ -28,17 +28,23 @@
 					<!-- avatar + basic info -->
 					<div class="row items-center q-col-gutter-md">
 						<div class="col-auto">
-							<q-avatar size="100px">
-								<img
-									src="https://randomgif.durzumzhumog.workers.dev/"
-									alt="User avatar"
-								/>
+							<q-avatar v-if="avatarUrl" size="100px">
+								<img :src="avatarUrl" alt="User avatar" />
+							</q-avatar>
+							<q-avatar v-else size="100px" color="primary" text-color="white">
+								{{ avatarInitials }}
 							</q-avatar>
 						</div>
 						<div class="col">
-							<div class="text-h5 text-weight-bold text-black">Jim Halpert</div>
-							<div class="text-subtitle2 text-grey-9">@bigtuna42</div>
-							<div class="text-caption text-grey-9">jim.halpert@office.com</div>
+							<div class="text-h5 text-weight-bold text-black">
+								{{ authUser?.fullName || 'Your Name' }}
+							</div>
+							<div class="text-subtitle2 text-grey-9">
+								{{ authUser?.nickname ? '@' + authUser.nickname : '@nickname' }}
+							</div>
+							<div class="text-caption text-grey-9">
+								{{ authUser?.email || 'your@email.com' }}
+							</div>
 						</div>
 					</div>
 
@@ -49,13 +55,15 @@
 						<div>
 							<div class="text-subtitle1 text-weight-bold">Bio</div>
 							<div class="text-body2 text-grey-9">
-								Bears. Beets. Battlestar Galactica.
+								{{ authUser?.bio || 'No bio yet.' }}
 							</div>
 						</div>
 
 						<div>
 							<div class="text-subtitle1 text-weight-bold">Joined</div>
-							<div class="text-body2 text-grey-9">October, 2025</div>
+							<div class="text-body2 text-grey-9">
+								{{ joinedDate || 'Unknown' }}
+							</div>
 						</div>
 					</div>
 
@@ -71,5 +79,60 @@
 </template>
 
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useAuthStore } from 'src/stores/auth'
+
 defineOptions({ name: 'ProfilePage' })
+
+const auth = useAuthStore()
+
+const authUser = computed(() => auth.user)
+
+const avatarUrl = computed(() => {
+	const user = authUser.value
+	// return empty string if there is no avatar, so template always gets a string
+	return user?.avatarUrl ?? ''
+})
+
+const avatarInitials = computed(() => {
+	const user = authUser.value
+	if (!user) return '?'
+
+	const chars: string[] = []
+
+	const first = user.firstname?.charAt(0)
+	if (first) chars.push(first)
+
+	const last = user.lastname?.charAt(0)
+	if (last) chars.push(last)
+
+	if (!chars.length && user.fullName) {
+		const parts = user.fullName.split(' ').filter(p => p && p.trim().length > 0)
+		const p0 = parts[0]?.charAt(0)
+		const p1 = parts[1]?.charAt(0)
+		if (p0) chars.push(p0)
+		if (p1) chars.push(p1)
+	}
+
+	const nick = user.nickname?.charAt(0)
+	if (!chars.length && nick) chars.push(nick)
+
+	const mail = user.email?.charAt(0)
+	if (!chars.length && mail) chars.push(mail)
+
+	return chars.join('').toUpperCase()
+})
+
+const joinedDate = computed(() => {
+	const user = authUser.value
+	if (!user || !user.createdAt) return ''
+
+	const date = new Date(user.createdAt)
+	if (Number.isNaN(date.getTime())) return ''
+
+	return date.toLocaleDateString('en-US', {
+		month: 'long',
+		year: 'numeric',
+	})
+})
 </script>
