@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
 import { getSocket } from 'boot/socket'
 import { useQuasar } from 'quasar'
@@ -27,6 +27,7 @@ export interface Member {
 	name: string
 	avatar?: string
 	color?: string
+	status?: string | null
 }
 
 export interface Message {
@@ -160,6 +161,15 @@ export const useChatsStore = defineStore('chats', () => {
 	function handleNotification(payload: WsNotificationPayload) {
 		console.log('[chatsStore] notification', payload)
 
+		const user = me.value
+		if (!user) return
+
+		//no notifications when user is dnd or offline
+		const status = (user.status ?? '').toLowerCase()
+		if (status === 'dnd' || status === 'offline') {
+			return
+		}
+
 		if (payload.type === 'message') {
 			$q.notify({
 				icon: 'chat',
@@ -210,6 +220,21 @@ export const useChatsStore = defineStore('chats', () => {
 
 		const socket = ensureSocket()
 		if (!socket) return
+
+		socket.on('connect', () => {
+			console.log('[chatsStore] socket connected, re-registering and rejoining rooms')
+
+			const user = authStore.user
+			if (user?.id) {
+				socket.emit('register', user.id)
+			}
+
+			//rejoin every chat we know we are in
+			joinedChats.value.forEach(chatId => {
+				console.log('[chatsStore] rejoining chat room after connect:', chatId)
+				socket.emit('joinChannel', chatId)
+			})
+		})
 
 		socket.on('message:new', handleIncomingMessage)
 		socket.on('notification', handleNotification)
@@ -365,6 +390,15 @@ export const useChatsStore = defineStore('chats', () => {
 	}
 
 	async function fetchChats() {
+		const user = me.value
+		const status = (user?.status ?? 'online').toLowerCase()
+
+		//do not refresh chats when user is offline
+		if (status === 'offline') {
+			console.log('[chatsStore] fetchChats skipped (user offline)')
+			return
+		}
+
 		try {
 			const res = await fetch(`${API_URL}/chats`, {
 				headers: {
@@ -393,6 +427,15 @@ export const useChatsStore = defineStore('chats', () => {
 	}
 
 	async function fetchChat(chatId: number) {
+		const user = me.value
+		const status = (user?.status ?? 'online').toLowerCase()
+
+		//do not refresh chats when user is offline
+		if (status === 'offline') {
+			console.log('[chatsStore] fetchChats skipped (user offline)')
+			return
+		}
+
 		try {
 			const res = await fetch(`${API_URL}/chats/${chatId}`, {
 				headers: {
@@ -417,6 +460,15 @@ export const useChatsStore = defineStore('chats', () => {
 	}
 
 	async function fetchMessages(chatId: number) {
+		const user = me.value
+		const status = (user?.status ?? '').toLowerCase()
+		
+		//do not refresh messages when user is offline
+		if (status === 'offline') {
+			console.log('[chatsStore] fetchMessages skipped (user offline)')
+			return
+		}
+
 		try {
 			const res = await fetch(`${API_URL}/chats/${chatId}/messages`, {
 				headers: {
@@ -444,6 +496,22 @@ export const useChatsStore = defineStore('chats', () => {
 			console.error('[chatsStore] fetchMessages error', err)
 		}
 	}
+
+	//refresh chat previews when coming back online from offline
+	watch(
+		() => authStore.user?.status,
+		(newStatus, oldStatus) => {
+			const normNew = (newStatus ?? 'online').toLowerCase()
+			const normOld = (oldStatus ?? 'online').toLowerCase()
+
+			//only react when we leave offline
+			if (normOld === 'offline' && (normNew === 'online' || normNew === 'dnd')) {
+				console.log('[chatsStore] status changed from offline to', normNew, '- refreshing chats')
+				void fetchChats()
+			}
+		},
+		{ immediate: false },
+	)
 
 	async function createChat(payload: {
 		name: string
@@ -942,6 +1010,16 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 	}
 
+	function setMemberStatus(chatId: number, userId: number, status: string | null) {
+		const chat = chats.value.find(c => c.id === chatId)
+		if (!chat) return
+
+		const member = chat.members.find(m => m.id === userId)
+		if (!member) return
+
+		member.status = status
+	}
+
 	return {
 		chats,
 		messagesByChat,
@@ -974,6 +1052,7 @@ export const useChatsStore = defineStore('chats', () => {
 		declineInvitation,
 		addMembersByNickname,
 		voteKick,
-		joinOrCreateByName
+		joinOrCreateByName,
+		setMemberStatus
 	}
 })

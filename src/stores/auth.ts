@@ -100,6 +100,38 @@ export const useAuthStore = defineStore('auth', () => {
 		}
 	}
 
+	async function updateStatus(newStatus: string) {
+		if (!token.value || !user.value) {
+			console.warn('updateStatus called without user/token')
+			return
+		}
+
+		try {
+			const res = await fetch(`${API_URL}/users/me/status`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json',
+					Authorization: `Bearer ${token.value}`,
+				},
+				body: JSON.stringify({ status: newStatus }),
+			})
+
+			if (!res.ok) {
+				console.error('updateStatus failed', res.status)
+				return
+			}
+
+			const data = await res.json()
+
+			// backend returns the user directly
+			user.value = data
+
+			localStorage.setItem('auth_user', JSON.stringify(user.value))
+		} catch (err) {
+			console.error('updateStatus error', err)
+		}
+	}
+
 	async function logout() {
 		console.log('User logged out')
 
@@ -122,5 +154,5 @@ export const useAuthStore = defineStore('auth', () => {
 		localStorage.removeItem('auth_user')
 	}
 
-	return { user, token, signup, login, logout }
+	return { user, token, signup, login, logout, updateStatus }
 })

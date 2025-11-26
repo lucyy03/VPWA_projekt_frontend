@@ -50,9 +50,63 @@ export default defineBoot(({ store }) => {
 		{ immediate: true },
 	)
 
+	watch(
+		() => authStore.user?.status,
+		status => {
+			const s = socket
+			if (!s) return
+
+			const user = authStore.user
+			const normalized = (status ?? 'online').toLowerCase()
+
+			//no logged-in user - ensure socket disconnected
+			if (!user) {
+				if (s.connected) {
+					console.log('[ws] disconnecting socket, no user')
+					s.disconnect()
+				}
+				return
+			}
+
+			//offline - stay disconnected
+			if (normalized === 'offline') {
+				if (s.connected) {
+					console.log('[ws] disconnecting socket due to offline status')
+					s.disconnect()
+				}
+				return
+			}
+
+			//online or dnd - ensure connected
+			if (!s.connected) {
+				console.log('[ws] reconnecting socket for status', normalized)
+				s.connect()
+			}
+		},
+		{ immediate: true },
+	)
+
 	s.on('chat:created', (chat: Chat) => {
 		console.log('[ws] chat:created', chat)
 		chatsStore.upsertChat(chat)
+	})
+
+	s.on('user:status', (payload: { chatId: number | null; userId: number; status: string | null }) => {
+		console.log('[ws] user:status', payload)
+
+		const chatId = payload.chatId
+		const userId = payload.userId
+		const status = payload.status ?? null
+
+		//chat-specific update
+		if (chatId !== null && Number.isFinite(Number(chatId))) {
+			chatsStore.setMemberStatus(Number(chatId), userId, status)
+		} else {
+			//if we ever need to update across all chats for that user
+			chatsStore.chats.forEach(c => {
+				chatsStore.setMemberStatus(c.id, userId, status)
+			})
+		}
 	})
 
     // s.on('message:new', (payload: WsMessagePayload) => {

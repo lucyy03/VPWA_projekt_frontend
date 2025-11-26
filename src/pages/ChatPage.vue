@@ -638,7 +638,7 @@ async function toggleTypingPreview() {
 	if (el) requestAnimationFrame(() => { el.scrollTop = el.scrollHeight })
 }
 
-function isNearBottom(el: HTMLElement | null, thresh = 40) {
+function isNearBottom(el: HTMLElement | null, thresh = 100) {
 	if (!el) return false
 	const delta = el.scrollHeight - (el.scrollTop + el.clientHeight)
 	return delta <= thresh
@@ -717,7 +717,8 @@ watch(
 
 		const added = newVal.slice(oldLen)
 		for (const m of added) {
-			await appendMessage(m)
+			const force = m.authorId === me.value.id
+			await appendMessage(m, { force })
 		}
 	},
 	{ deep: true },

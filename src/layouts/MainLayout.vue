@@ -18,12 +18,14 @@
 
         <q-item>
           <q-item-section avatar>
-            <q-avatar v-if="menuAvatarUrl" size="32px">
-              <img :src="menuAvatarUrl" alt="User avatar" />
-            </q-avatar>
-            <q-avatar v-else size="32px" color="primary" text-color="white">
-              {{ menuAvatarInitials }}
-            </q-avatar>
+            <div :class="['member-avatar-ring', statusRingClass(userStatus)]">
+              <q-avatar v-if="menuAvatarUrl" size="32px">
+                <img :src="menuAvatarUrl" alt="User avatar" />
+              </q-avatar>
+              <q-avatar v-else size="32px" color="primary" text-color="white">
+                {{ menuAvatarInitials }}
+              </q-avatar>
+            </div>
           </q-item-section>
           <q-item-section>
             <q-item-label>{{ menuDisplayName }}</q-item-label>
@@ -108,8 +110,34 @@
   </q-layout>
 </template>
 
+<style scoped>
+.member-avatar-ring {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+	border-radius: 9999px;
+	border: 2px solid transparent;
+}
+
+/* green - online */
+.member-avatar-ring--online {
+	border-color: #21ba45; /* quasar positive-ish green */
+}
+
+/* red - dnd */
+.member-avatar-ring--dnd {
+	border-color: #c10015; /* quasar negative-ish red */
+}
+
+/* grey - offline */
+.member-avatar-ring--offline {
+	border-color: #9e9e9e;
+}
+</style>
+
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import { useRouter } from 'vue-router';
 import CliOverlay from 'src/components/CliOverlay.vue'
 import { useAuthStore } from 'src/stores/auth'
@@ -189,37 +217,65 @@ async function logout() {
 }
 
 // user status handling
-const userStatus = ref('online');
+const userStatus = ref(authUser.value?.status ?? 'online')
+
 const statusOptions = [
-  { label: 'Online', value: 'online' },
-  { label: 'Do Not Disturb', value: 'dnd' },
-  { label: 'Invisible', value: 'invisible' }
-];
+	{ label: 'Online', value: 'online' },
+	{ label: 'Do Not Disturb', value: 'dnd' },
+	{ label: 'Offline', value: 'offline' },
+]
+
+// keep local select in sync when auth user changes (e.g. after login/refresh)
+watch(authUser, newUser => {
+	if (newUser && newUser.status) {
+		userStatus.value = newUser.status
+	}
+})
+
+// push changes to backend when user picks something
+watch(userStatus, async (newStatus, oldStatus) => {
+	if (newStatus === oldStatus) return
+	if (!authUser.value) return
+
+	try {
+		await auth.updateStatus(newStatus)
+	} catch (err) {
+		console.error('failed to update status', err)
+	}
+})
+
 // computed icon and color for each status
 const statusIcon = computed(() => {
-  switch (userStatus.value) {
-    case 'online':
-      return 'circle';
-    case 'dnd':
-      return 'block';
-    case 'invisible':
-      return 'visibility_off';
-    default:
-      return 'help';
-  }
-});
+	switch (userStatus.value) {
+		case 'online':
+			return 'circle'
+		case 'dnd':
+			return 'block'
+		case 'offline':
+			return 'visibility_off'
+		default:
+			return 'help'
+	}
+})
+
 const statusColor = computed(() => {
-  switch (userStatus.value) {
-    case 'online':
-      return 'positive';
-    case 'dnd':
-      return 'negative';
-    case 'invisible':
-      return 'grey';
-    default:
-      return 'primary';
-  }
-});
+	switch (userStatus.value) {
+		case 'online':
+			return 'positive'
+		case 'dnd':
+			return 'negative'
+		case 'offline':
+			return 'grey'
+		default:
+			return 'primary'
+	}
+})
+
+function statusRingClass(status?: string | null): string {
+	if (status === 'online') return 'member-avatar-ring--online'
+	if (status === 'dnd') return 'member-avatar-ring--dnd'
+	return 'member-avatar-ring--offline'
+}
 
 
 </script>

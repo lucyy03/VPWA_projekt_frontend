@@ -13,19 +13,25 @@
 
 					<q-item v-for="m in members" :key="m.id">
 						<q-item-section avatar>
-							<q-avatar>
-								<template v-if="m.avatar">
-									<img :src="m.avatar" alt="avatar" />
-								</template>
-								<template v-else>
-									<div
-										class="flex items-center justify-center"
-										:style="avatarStyle(m)"
-									>
-										{{ m.name?.charAt(0)?.toUpperCase() ?? '?' }}
-									</div>
-								</template>
-							</q-avatar>
+							<div :class="['member-avatar-ring', statusRingClass(m.status)]">
+								<q-avatar v-if="m.id === meId && menuAvatarUrl" size="32px">
+									<img :src="menuAvatarUrl" alt="User avatar" />
+								</q-avatar>
+
+								<q-avatar v-else>
+									<template v-if="m.avatar">
+										<img :src="m.avatar" alt="avatar" />
+									</template>
+									<template v-else>
+										<div
+											class="flex items-center justify-center"
+											:style="avatarStyle(m)"
+										>
+											{{ m.name?.charAt(0)?.toUpperCase() ?? '?' }}
+										</div>
+									</template>
+								</q-avatar>
+							</div>
 						</q-item-section>
 
 						<q-item-section>
@@ -41,6 +47,9 @@
 									class="text-primary"
 								>
 									admin
+								</q-item-label>
+								<q-item-label caption class="text-grey-6">
+									{{ memberStatusLabel(m.status) }}
 								</q-item-label>
 							</q-item-section>
 						</q-item-section>
@@ -79,9 +88,36 @@
 	</q-dialog>
 </template>
 
+<style scoped>
+.member-avatar-ring {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	padding: 2px;
+	border-radius: 9999px;
+	border: 2px solid transparent;
+}
+
+/* green - online */
+.member-avatar-ring--online {
+	border-color: #21ba45; /* quasar positive-ish green */
+}
+
+/* red - dnd */
+.member-avatar-ring--dnd {
+	border-color: #c10015; /* quasar negative-ish red */
+}
+
+/* grey - offline */
+.member-avatar-ring--offline {
+	border-color: #9e9e9e;
+}
+</style>
+
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import type { Member } from 'src/stores/chats'
+import { useAuthStore } from 'src/stores/auth'
 
 const props = defineProps<{
 	modelValue: boolean
@@ -99,6 +135,12 @@ const emit = defineEmits<{
 }>()
 
 const localOpen = ref(props.modelValue)
+const auth = useAuthStore()
+const authUser = computed(() => auth.user)
+const menuAvatarUrl = computed(() => {
+	const user = authUser.value
+	return user?.avatarUrl ?? ''
+})
 
 watch(
 	() => props.modelValue,
@@ -123,4 +165,18 @@ function avatarStyle(m: Member): string {
 	const bg = m.color ? `background:${m.color};` : 'background:#607D8B;'
 	return base + bg
 }
+
+function memberStatusLabel(status?: string | null): string {
+	if (status === 'online') return 'online'
+	if (status === 'dnd') return 'do not disturb'
+	if (status === 'offline') return 'offline'
+	return ''
+}
+
+function statusRingClass(status?: string | null): string {
+	if (status === 'online') return 'member-avatar-ring--online'
+	if (status === 'dnd') return 'member-avatar-ring--dnd'
+	return 'member-avatar-ring--offline'
+}
+
 </script>
