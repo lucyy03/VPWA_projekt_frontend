@@ -27,22 +27,6 @@
 					<div class="text-h5 q-mb-md text-bold text-center">Settings</div>
 					<q-separator spaced />
 
-					<!-- dark mode -->
-					<div class="row items-center justify-between q-py-sm">
-						<div class="col">
-							<div class="text-subtitle1 text-weight-medium">Dark Mode</div>
-						</div>
-						<div class="col-auto">
-							<q-toggle
-								v-model="darkMode"
-								color="black"
-								checked-icon="dark_mode"
-								unchecked-icon="light_mode"
-							/>
-						</div>
-					</div>
-
-					<q-separator spaced />
 
 					<!-- notifications -->
 					<div class="row items-center justify-between q-py-sm">
@@ -74,23 +58,7 @@
 								color="black"
 								label="Off / On"
 								left-label
-							/>
-						</div>
-					</div>
-
-					<q-separator spaced />
-
-					<!-- visibility -->
-					<div class="row items-center justify-between q-py-sm">
-						<div class="col">
-							<div class="text-subtitle1 text-weight-medium">Visibility</div>
-						</div>
-						<div class="col-auto">
-							<q-toggle
-								v-model="visibility"
-								color="black"
-								label="Off / On"
-								left-label
+								:disable="!notifications"
 							/>
 						</div>
 					</div>
@@ -108,21 +76,45 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onMounted } from 'vue'
 import { useQuasar } from 'quasar'
+import { useSettingsStore } from 'src/stores/settings'
 
-//assumption: quasar dark mode plugin is enabled
 const $q = useQuasar()
+const settingsStore = useSettingsStore()
 
-const darkMode = ref(false)
-const notifications = ref(true)
-const mentions = ref(true)
-const visibility = ref(true)
+//wire notifications toggle to store
+const notifications = computed({
+	get() {
+		return settingsStore.notifications
+	},
+	set(val: boolean) {
+		settingsStore.notifications = val
+	},
+})
 
-function onSave() {
+//wire "mentions only" toggle to store
+const mentions = computed({
+	get() {
+		return settingsStore.mentionsOnly
+	},
+	set(val: boolean) {
+		settingsStore.mentionsOnly = val
+	},
+})
+
+onMounted(() => {
+	if (!settingsStore.loadedOnce) {
+		void settingsStore.fetchSettings()
+	}
+})
+
+async function onSave() {
+	await settingsStore.saveSettings()
+
 	$q.notify({
 		type: 'positive',
-		message: 'Settings saved (frontend only)'
+		message: 'Settings saved',
 	})
 }
 </script>

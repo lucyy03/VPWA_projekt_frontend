@@ -3,6 +3,7 @@ import { ref, computed, watch } from 'vue'
 import { useAuthStore } from 'src/stores/auth'
 import { getSocket } from 'boot/socket'
 import { useQuasar } from 'quasar'
+import { useSettingsStore } from 'src/stores/settings'
 
 const API_URL = import.meta.env.VITE_API_URL
 
@@ -106,6 +107,7 @@ export const useChatsStore = defineStore('chats', () => {
 	const authStore = useAuthStore()
 	const me = computed(() => authStore.user)
 	const $q = useQuasar()
+	const settingsStore = useSettingsStore()
 
 	const joinedChats = ref<Set<number>>(new Set())
 
@@ -164,6 +166,15 @@ export const useChatsStore = defineStore('chats', () => {
 		const user = me.value
 		if (!user) return
 
+		//read current settings
+		const notificationsEnabled = settingsStore.notifications
+		const mentionsOnly = settingsStore.mentionsOnly
+
+		//if notifications are off: no notifications at all
+		if (!notificationsEnabled) {
+			return
+		}
+
 		//no notifications when user is dnd or offline
 		const status = (user.status ?? '').toLowerCase()
 		if (status === 'dnd' || status === 'offline') {
@@ -171,6 +182,10 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 
 		if (payload.type === 'message') {
+			//if "mentions only" is on, skip generic message notifications
+			if (mentionsOnly) {
+				return
+			}
 			$q.notify({
 				icon: 'chat',
 				color: 'secondary',
@@ -187,7 +202,7 @@ export const useChatsStore = defineStore('chats', () => {
 				color: 'accent',
 				position: 'bottom-right',
 				timeout: 10000,
-				message: `mentioned by @${payload.fromNickname}`,
+				message: `mentioned by @${payload.fromNickname} in #${payload.chatName}`,
 				caption: payload.preview,
 			})
 		}
