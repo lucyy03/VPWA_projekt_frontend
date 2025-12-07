@@ -164,7 +164,9 @@ export const useChatsStore = defineStore('chats', () => {
 		console.log('[chatsStore] notification', payload)
 
 		const user = me.value
-		if (!user) return
+		if (!user) {
+			return
+		}
 
 		//read current settings
 		const notificationsEnabled = settingsStore.notifications
@@ -181,52 +183,95 @@ export const useChatsStore = defineStore('chats', () => {
 			return
 		}
 
+		const isVisible = $q.appVisible === true
+
 		if (payload.type === 'message') {
 			//if "mentions only" is on, skip generic message notifications
 			if (mentionsOnly) {
 				return
 			}
-			$q.notify({
-				icon: 'chat',
-				color: 'secondary',
-				position: 'bottom-right',
-				timeout: 5000,
-				message: `new message in #${payload.chatName}`,
-				caption: `from @${payload.fromNickname}: ${payload.preview}`,
-			})
+
+			if (isVisible) {
+				$q.notify({
+					icon: 'chat',
+					color: 'secondary',
+					position: 'bottom-right',
+					timeout: 5000,
+					message: `new message in #${payload.chatName}`,
+					caption: `from @${payload.fromNickname}: ${payload.preview}`,
+				})
+			} else {
+				showSystemNotification(
+					`new message in #${payload.chatName}`,
+					`from @${payload.fromNickname}: ${payload.preview}`,
+				)
+			}
 		}
 
 		if (payload.type === 'mention') {
-			$q.notify({
-				icon: 'alternate_email',
-				color: 'accent',
-				position: 'bottom-right',
-				timeout: 10000,
-				message: `mentioned by @${payload.fromNickname} in #${payload.chatName}`,
-				caption: payload.preview,
-			})
+			if (isVisible) {
+				$q.notify({
+					icon: 'alternate_email',
+					color: 'accent',
+					position: 'bottom-right',
+					timeout: 10000,
+					message: `mentioned by @${payload.fromNickname} in #${payload.chatName}`,
+					caption: payload.preview,
+				})
+			} else {
+				showSystemNotification(
+					`mention in #${payload.chatName}`,
+					`@${payload.fromNickname}: ${payload.preview}`,
+				)
+			}
 		}
 
 		if (payload.type === 'channel-invite') {
-			$q.notify({
-				icon: 'group_add',
-				color: 'primary',
-				position: 'bottom-right',
-				timeout: 10000,
-				message: 'channel invite',
-				caption: `you were invited to #${payload.chatName} by @${payload.fromNickname}`,
-				actions: [
-					{
-						label: 'Open',
-						color: 'white',
-						handler: () => {
-							//todo: navigate to channel by id (use router in component)
+			if (isVisible) {
+				$q.notify({
+					icon: 'group_add',
+					color: 'primary',
+					position: 'bottom-right',
+					timeout: 10000,
+					message: 'channel invite',
+					caption: `you were invited to #${payload.chatName} by @${payload.fromNickname}`,
+					actions: [
+						{
+							label: 'Open',
+							color: 'white',
+							handler: () => {
+								//todo:navigate to channel by id (use router in component)
+							},
 						},
-					},
-				],
-			})
+					],
+				})
+			} else {
+				showSystemNotification(
+					'channel invite',
+					`you were invited to #${payload.chatName} by @${payload.fromNickname}`,
+				)
+			}
 		}
-		
+	}
+
+
+	function showSystemNotification(title: string, body: string) {
+		if (typeof window === 'undefined') {
+			return
+		}
+
+		if (!('Notification' in window)) {
+			return
+		}
+
+		if (Notification.permission !== 'granted') {
+			return
+		}
+
+		//this becomes a windows toast on windows
+		new Notification(title, {
+			body,
+		})
 	}
 
 	//attach listeners only once
