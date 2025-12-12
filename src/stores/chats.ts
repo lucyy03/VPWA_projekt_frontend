@@ -104,6 +104,30 @@ export const useChatsStore = defineStore('chats', () => {
 	const messagesByChat = ref<Record<number, Message[]>>({})
 	const typingByChat = ref<Record<number, TypingState | null>>({})
 
+	const TYPING_TIMEOUT_MS = 5000
+
+	if (typeof window !== 'undefined') {
+		setInterval(() => {
+			const now = Date.now()
+
+			for (const chatIdStr of Object.keys(typingByChat.value)) {
+				const chatId = Number(chatIdStr)
+				const state = typingByChat.value[chatId]
+
+				if (!state) {
+					delete typingByChat.value[chatId]
+					continue
+				}
+
+				if (now - state.updatedAt > TYPING_TIMEOUT_MS) {
+					//typing state is stale, remove it
+					delete typingByChat.value[chatId]
+				}
+			}
+		}, 500)
+	}
+
+
 	const authStore = useAuthStore()
 	const me = computed(() => authStore.user)
 	const $q = useQuasar()

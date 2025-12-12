@@ -78,6 +78,12 @@
 						class="w-280"
 						@click="onSubmit"
 					/>
+					<q-btn
+						label="Back to Login"
+						color="black"
+						class="w-280"
+						@click="goToLogin"
+				/>
 				</div>
 
 				<div v-if="error" class="text-negative text-caption">{{ error }}</div>
@@ -123,6 +129,10 @@ async function onSubmit() {
 	} finally {
 		loading.value = false
 	}
+}
+
+async function goToLogin() {
+	await router.push('/login')
 }
 
 </script>
