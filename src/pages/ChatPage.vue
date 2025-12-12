@@ -213,6 +213,14 @@ let ro: ResizeObserver | null = null
 //disable page scrolling while this view is active
 onMounted(async () => {
 	document.body.classList.add('no-scroll')
+
+	const id = Number(route.params.id)
+	if (Number.isFinite(id)) {
+		chatsStore.setActiveChat(id)
+	} else {
+		chatsStore.setActiveChat(null)
+	}
+	
 	const update = () => {
 		composerH.value = composerEl.value?.offsetHeight ?? 72
 	}
@@ -248,6 +256,7 @@ onBeforeUnmount(() => {
 	document.body.classList.remove('no-scroll')
 	if (ro && composerEl.value) ro.unobserve(composerEl.value)
 	ro = null
+	chatsStore.setActiveChat(null)
 })
 
 const currentChatId = computed(() => Number(route.params.id))
@@ -259,6 +268,40 @@ const chat = computed(() => {
 })
 
 const draft = ref('')
+
+watch(
+	currentChatId,
+	async (id) => {
+		initialMessagesLoaded.value = false
+		visible.value = []
+		firstIndex.value = 0
+
+		if (!Number.isFinite(id)) {
+			chatsStore.setActiveChat(null)
+			return
+		}
+
+		chatsStore.setActiveChat(id)
+
+		await chatsStore.fetchChat(id)
+		await chatsStore.fetchMessages(id)
+		chatsStore.joinChatRoom(id)
+
+		const all = chatsStore.getMessages(id)
+		const total = all.length
+		firstIndex.value = Math.max(0, total - CHUNK)
+		visible.value = all.slice(firstIndex.value)
+
+		await nextTick()
+		if (scrollEl.value) scrollEl.value.scrollTop = scrollEl.value.scrollHeight
+
+		// inf.value?.reset()
+		// inf.value?.resume()
+
+		initialMessagesLoaded.value = true
+	},
+	{ immediate: true },
+)
 
 watch(draft, (val) => {
 	const c = chat.value

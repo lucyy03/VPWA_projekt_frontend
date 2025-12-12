@@ -104,6 +104,7 @@ export const useChatsStore = defineStore('chats', () => {
 	const messagesByChat = ref<Record<number, Message[]>>({})
 	const typingByChat = ref<Record<number, TypingState | null>>({})
 
+	const activeChatId = ref<number | null>(null)
 	const TYPING_TIMEOUT_MS = 5000
 
 	if (typeof window !== 'undefined') {
@@ -146,6 +147,10 @@ export const useChatsStore = defineStore('chats', () => {
 			return null
 		}
 		return s
+	}
+
+	function setActiveChat(chatId: number | null) { 
+		activeChatId.value = chatId
 	}
 
 	function clearTypingFor(chatId: number, userId: number) {
@@ -207,11 +212,27 @@ export const useChatsStore = defineStore('chats', () => {
 			return
 		}
 
+		const chatId = Number(payload.chatId)
+		if (!Number.isFinite(chatId)) {
+			return
+		}
+
 		const isVisible = $q.appVisible === true
+		//if the currently open chat is this one, don't notify
+		const isCurrentChat = activeChatId.value != null && activeChatId.value === chatId
+
+		console.log('activeChatId', activeChatId.value, typeof activeChatId.value)
+		console.log('payload.chatId', payload.chatId, typeof payload.chatId)
+		console.log('isCurrentChat', isCurrentChat)
 
 		if (payload.type === 'message') {
 			//if "mentions only" is on, skip generic message notifications
 			if (mentionsOnly) {
+				return
+			}
+
+			//don't notify when user is actively viewing this chat
+			if (isCurrentChat) {
 				return
 			}
 
@@ -233,6 +254,11 @@ export const useChatsStore = defineStore('chats', () => {
 		}
 
 		if (payload.type === 'mention') {
+			//don't notify when user is actively viewing this chat
+			if (isCurrentChat) {
+				return
+			}
+
 			if (isVisible) {
 				$q.notify({
 					icon: 'alternate_email',
@@ -1137,6 +1163,7 @@ export const useChatsStore = defineStore('chats', () => {
 		addMembersByNickname,
 		voteKick,
 		joinOrCreateByName,
-		setMemberStatus
+		setMemberStatus,
+		setActiveChat
 	}
 })
