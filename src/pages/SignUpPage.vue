@@ -108,12 +108,17 @@ async function onSubmit() {
 	try {
 		const fullName = `${first_name.value} ${last_name.value}`.trim()
 
-		const ok = await auth.signup(fullName, nickname.value, email.value, password.value)
+		const result = await auth.signup(
+			fullName,
+			nickname.value,
+			email.value,
+			password.value,
+		)
 
-		if (ok) {
+		if (result.ok) {
 			await router.push('/chats')
 		} else {
-			error.value = 'Signup failed. Please check your info.'
+			error.value = result.error || 'Signup failed. Please check your info.'
 		}
 	} finally {
 		loading.value = false

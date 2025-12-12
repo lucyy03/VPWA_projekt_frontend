@@ -1,6 +1,6 @@
 <template>
   <q-dialog v-model="open" transition-show="scale" transition-hide="scale" persistent>
-    <q-card style="min-width:680px;max-width:90vw">
+    <q-card style="width:min(680px, 90vw)">
       <q-card-section class="row items-center">
         <q-icon name="terminal" class="q-mr-sm" />
         <div class="text-subtitle1">command palette</div>

@@ -3,6 +3,17 @@ import { ref } from 'vue'
 
 const API_URL = import.meta.env.VITE_API_URL
 
+type SignupSuccessResponse = {
+	token: unknown
+	user: unknown
+}
+
+type SignupErrorResponse = {
+	error: string
+}
+
+type SignupResponse = SignupSuccessResponse | SignupErrorResponse
+
 interface AuthUser {
 	id: number
 	fullName: string | null
@@ -40,28 +51,78 @@ export const useAuthStore = defineStore('auth', () => {
 				body: JSON.stringify({ name, nickname, email, password }),
 			})
 
-			if (!res.ok) {
-				console.error('signup failed', res.status)
-				return false
+			let data: SignupResponse | null = null
+
+			try {
+				data = (await res.json()) as SignupResponse
+			} catch {
+				//no json body or invalid json
+				data = null
 			}
 
-			const data = await res.json()
+			if (!res.ok) {
+				console.error('signup failed', res.status, data)
 
-			// backend returns { token, user }
-			// token.value is the actual string we send as bearer
-			const rawToken: string =
-				data.token?.value ?? data.token?.token ?? data.token
+				const message =
+					data && 'error' in data && typeof data.error === 'string'
+						? data.error
+						: 'Signup failed. Please check your info.'
 
-			token.value = rawToken
-			user.value = data.user
+				return {
+					ok: false as const,
+					error: message,
+				}
+			}
+
+			if (!data || !('token' in data) || !('user' in data)) {
+				console.error('unexpected signup response shape', data)
+
+				return {
+					ok: false as const,
+					error: 'Unexpected server response.',
+				}
+			}
+
+			const successData: SignupSuccessResponse = data
+
+			let rawToken: string | null = null
+
+			if (typeof successData.token === 'string') {
+				rawToken = successData.token
+			} else if (typeof successData.token === 'object' && successData.token !== null) {
+				const tokenObj = successData.token as {
+					value?: string
+					token?: string
+				}
+
+				rawToken = tokenObj.value ?? tokenObj.token ?? null
+			}
+
+			if (!rawToken) {
+				console.error('could not extract token from signup response', successData)
+
+				return {
+					ok: false as const,
+					error: 'Unexpected server response.',
+				}
+			}
+
+			token.value = rawToken as typeof token.value
+			user.value = successData.user as typeof user.value
 
 			localStorage.setItem('auth_token', rawToken)
-			localStorage.setItem('auth_user', JSON.stringify(data.user))
+			localStorage.setItem('auth_user', JSON.stringify(successData.user))
 
-			return true
+			return {
+				ok: true as const,
+			}
 		} catch (err) {
 			console.error('signup error', err)
-			return false
+
+			return {
+				ok: false as const,
+				error: 'Network error. Please try again.',
+			}
 		}
 	}
 
