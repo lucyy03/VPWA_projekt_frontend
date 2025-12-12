@@ -28,7 +28,7 @@
 				<q-input
 					v-model="email"
 					type="email"
-					label="E-mail"
+					label="E-mail or nickname"
 					autocomplete="email"
 					dense
 					outlined
@@ -89,7 +89,7 @@ async function onSubmit() {
 		if (ok) {
 			await router.push('/chats')
 		} else {
-			error.value = 'Invalid email or password.'
+			error.value = 'Invalid email/nickname or password.'
 		}
 	} finally {
 		loading.value = false
